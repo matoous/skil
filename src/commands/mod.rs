@@ -230,7 +230,7 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
     if should_prompt_agents && supports_global && !args.global && !args.yes {
         let selection = dialoguer::Select::with_theme(&ColorfulTheme::default())
             .with_prompt("Installation scope")
-            .items(&["Project (current directory)", "Global (home directory)"])
+            .items(["Project (current directory)", "Global (home directory)"])
             .default(0)
             .interact()
             .map_err(|err| SkillzError::Message(err.to_string()))?;
@@ -245,7 +245,7 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
     if should_prompt_agents && !args.yes && !args.copy {
         let selection = dialoguer::Select::with_theme(&ColorfulTheme::default())
             .with_prompt("Installation method")
-            .items(&["Symlink (recommended)", "Copy to each agent"])
+            .items(["Symlink (recommended)", "Copy to each agent"])
             .default(0)
             .interact()
             .map_err(|err| SkillzError::Message(err.to_string()))?;
@@ -596,10 +596,10 @@ pub fn run_check() -> Result<()> {
         }
     }
 
-    if let Some(errors) = data.errors {
-        if !errors.is_empty() {
-            ui::warn(&format!("Could not check {} skill(s)", errors.len()));
-        }
+    if let Some(errors) = data.errors
+        && !errors.is_empty()
+    {
+        ui::warn(&format!("Could not check {} skill(s)", errors.len()));
     }
 
     Ok(())

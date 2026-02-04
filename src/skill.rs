@@ -34,13 +34,13 @@ pub fn discover_skills(
     let mut skills = Vec::new();
     let mut seen = std::collections::HashSet::new();
 
-    if has_skill_md(&search_root) {
-        if let Some(skill) = parse_skill_md(&search_root.join("SKILL.md"))? {
-            seen.insert(skill.name.clone());
-            skills.push(skill);
-            if !full_depth {
-                return Ok(skills);
-            }
+    if has_skill_md(&search_root)
+        && let Some(skill) = parse_skill_md(&search_root.join("SKILL.md"))?
+    {
+        seen.insert(skill.name.clone());
+        skills.push(skill);
+        if !full_depth {
+            return Ok(skills);
         }
     }
 
@@ -51,12 +51,12 @@ pub fn discover_skills(
         }
         for entry in std::fs::read_dir(&dir)? {
             let entry = entry?;
-            if entry.path().is_dir() && has_skill_md(&entry.path()) {
-                if let Some(skill) = parse_skill_md(&entry.path().join("SKILL.md"))? {
-                    if seen.insert(skill.name.clone()) {
-                        skills.push(skill);
-                    }
-                }
+            if entry.path().is_dir()
+                && has_skill_md(&entry.path())
+                && let Some(skill) = parse_skill_md(&entry.path().join("SKILL.md"))?
+                && seen.insert(skill.name.clone())
+            {
+                skills.push(skill);
             }
         }
     }
@@ -67,12 +67,11 @@ pub fn discover_skills(
             .into_iter()
             .filter_map(|e| e.ok())
         {
-            if entry.file_name() == "SKILL.md" {
-                if let Some(skill) = parse_skill_md(entry.path())? {
-                    if seen.insert(skill.name.clone()) {
-                        skills.push(skill);
-                    }
-                }
+            if entry.file_name() == "SKILL.md"
+                && let Some(skill) = parse_skill_md(entry.path())?
+                && seen.insert(skill.name.clone())
+            {
+                skills.push(skill);
             }
         }
     }
