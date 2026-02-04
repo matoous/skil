@@ -2,19 +2,19 @@ use std::path::{Path, PathBuf};
 
 use crate::agent::{agent_configs, resolve_agents};
 use crate::cli::{AddArgs, FindArgs, InitArgs, ListArgs, RemoveArgs};
+use crate::config::{config_location, config_location_auto, read_config, update_config, SkillzSource};
 use crate::error::{Result, SkillzError};
-use crate::git::clone_repo;
+use crate::git::{clone_repo, head_revision, remote_revision};
 use crate::install::{
     agent_skills_base, canonical_skills_dir, install_skill, sanitize_name, InstallMode,
 };
-use crate::lock::{read_lock, remove_lock_entry, update_lock_for_skill};
+use crate::lock::{remove_lock_entry, update_lock_for_skill};
 use crate::skill::{discover_skills, parse_skill_md, select_skills};
 use crate::source::{parse_source, Source};
 use crate::ui;
 use dialoguer::theme::ColorfulTheme;
 use std::collections::HashSet;
 
-const CHECK_UPDATES_API_URL: &str = "https://add-skill.vercel.sh/check-updates";
 const SEARCH_API_BASE: &str = "https://skills.sh";
 
 #[derive(Debug, serde::Deserialize)]
@@ -28,40 +28,11 @@ struct SearchApiSkill {
     installs: Option<u64>,
     source: Option<String>,
 }
-
-#[derive(Debug, serde::Deserialize)]
-struct CheckUpdatesResponse {
-    updates: Vec<CheckUpdatesEntry>,
-    errors: Option<Vec<CheckUpdatesError>>,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct CheckUpdatesEntry {
-    name: String,
-    source: String,
-}
-
-#[derive(Debug, serde::Deserialize)]
-#[allow(dead_code)]
-struct CheckUpdatesError {
-    name: String,
-    source: String,
-    error: String,
-}
-
-#[derive(Debug, serde::Serialize)]
-struct CheckUpdatesRequest {
-    skills: Vec<CheckUpdatesRequestSkill>,
-}
-
-#[derive(Debug, serde::Serialize)]
-struct CheckUpdatesRequestSkill {
-    name: String,
-    source: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    path: Option<String>,
-    #[serde(rename = "skillFolderHash")]
-    skill_folder_hash: String,
+#[derive(Debug)]
+struct UpdateEntry {
+    source_key: String,
+    source: SkillzSource,
+    latest_revision: String,
 }
 
 fn prompt_for_skills(skills: &[crate::skill::Skill]) -> Result<Vec<String>> {
@@ -276,6 +247,11 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
         Source::Git { subpath, info, .. } => (subpath.clone(), Some(info.clone())),
     };
 
+    let revision = match &source {
+        Source::Local { .. } => None,
+        Source::Git { .. } => head_revision(&base_path).ok(),
+    };
+
     let skills = discover_skills(&base_path, subpath.as_deref(), args.full_depth)?;
 
     if skills.is_empty() {
@@ -314,6 +290,36 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
         }
     }
     install_spinner.finish_with_message("Installation complete");
+
+    let config_location = config_location(install_global)?;
+    let source_key = match &source {
+        Source::Local { path } => path.to_string_lossy().to_string(),
+        Source::Git { url, .. } => url.clone(),
+    };
+    let source_entry = match &source {
+        Source::Local { .. } => SkillzSource {
+            source_type: "local".to_string(),
+            branch: None,
+            subpath: None,
+            revision: None,
+            skills: vec![],
+        },
+        Source::Git { subpath, info, .. } => SkillzSource {
+            source_type: info.source_type.clone(),
+            branch: info.github_branch.clone(),
+            subpath: subpath.as_ref().map(|p| p.to_string_lossy().to_string()),
+            revision: None,
+            skills: vec![],
+        },
+    };
+    let skill_names: Vec<String> = selected_skills.iter().map(|s| s.name.clone()).collect();
+    update_config(
+        &config_location.path,
+        &source_key,
+        source_entry,
+        &skill_names,
+        revision,
+    )?;
 
     ui::success(&format!(
         "Installed {} skill(s) to {} agent(s)",
@@ -553,53 +559,40 @@ pub fn run_find(args: FindArgs) -> Result<()> {
     Ok(())
 }
 
-/// Checks for updates for skills tracked in the lock file.
+/// Checks for updates for skills tracked in config.
 pub fn run_check() -> Result<()> {
     ui::info("Checking for skill updates...");
-    let lock = read_lock()?;
-    if lock.skills.is_empty() {
-        ui::info("No skills tracked in lock file.");
+    let location = config_location_auto()?;
+    let config = read_config(&location.path)?;
+    if config.sources.is_empty() {
+        ui::info("No skills tracked in config.");
         return Ok(());
     }
 
-    let mut request = CheckUpdatesRequest { skills: vec![] };
-    for (name, entry) in &lock.skills {
-        if entry.skill_folder_hash.is_empty() {
+    let mut updates = Vec::new();
+    for (source_key, source) in &config.sources {
+        if source.source_type == "local" {
             continue;
         }
-        request.skills.push(CheckUpdatesRequestSkill {
-            name: name.clone(),
-            source: entry.source.clone(),
-            path: entry.skill_path.clone(),
-            skill_folder_hash: entry.skill_folder_hash.clone(),
-        });
-    }
-
-    if request.skills.is_empty() {
-        ui::info("No skills to check.");
-        return Ok(());
-    }
-
-    let client = reqwest::blocking::Client::new();
-    let res = client.post(CHECK_UPDATES_API_URL).json(&request).send()?;
-    if !res.status().is_success() {
-        return Err(SkillzError::Message(format!("API error: {}", res.status())));
-    }
-
-    let data: CheckUpdatesResponse = res.json()?;
-    if data.updates.is_empty() {
-        ui::success("All skills are up to date");
-    } else {
-        ui::heading(&format!("{} update(s) available", data.updates.len()));
-        for update in data.updates {
-            ui::list_item(&format!("{} ({})", update.name, update.source));
+        let latest = remote_revision(source_key, source.branch.as_deref())?;
+        let current = source.revision.clone().unwrap_or_default();
+        if current.is_empty() || current != latest {
+            updates.push(UpdateEntry {
+                source_key: source_key.clone(),
+                source: source.clone(),
+                latest_revision: latest,
+            });
         }
     }
 
-    if let Some(errors) = data.errors
-        && !errors.is_empty()
-    {
-        ui::warn(&format!("Could not check {} skill(s)", errors.len()));
+    if updates.is_empty() {
+        ui::success("All skills are up to date");
+        return Ok(());
+    }
+
+    ui::heading(&format!("{} update(s) available", updates.len()));
+    for update in updates {
+        ui::list_item(&format!("{} ({})", update.source_key, update.latest_revision));
     }
 
     Ok(())
@@ -608,59 +601,48 @@ pub fn run_check() -> Result<()> {
 /// Updates all skills that have updates available.
 pub fn run_update() -> Result<()> {
     ui::info("Checking for skill updates...");
-    let lock = read_lock()?;
-    if lock.skills.is_empty() {
-        ui::info("No skills tracked in lock file.");
+    let location = config_location_auto()?;
+    let config = read_config(&location.path)?;
+    if config.sources.is_empty() {
+        ui::info("No skills tracked in config.");
         return Ok(());
     }
 
-    let mut request = CheckUpdatesRequest { skills: vec![] };
-    for (name, entry) in &lock.skills {
-        if entry.skill_folder_hash.is_empty() {
+    let mut updates = Vec::new();
+    for (source_key, source) in &config.sources {
+        if source.source_type == "local" {
             continue;
         }
-        request.skills.push(CheckUpdatesRequestSkill {
-            name: name.clone(),
-            source: entry.source.clone(),
-            path: entry.skill_path.clone(),
-            skill_folder_hash: entry.skill_folder_hash.clone(),
-        });
+        let latest = remote_revision(source_key, source.branch.as_deref())?;
+        let current = source.revision.clone().unwrap_or_default();
+        if current.is_empty() || current != latest {
+            updates.push(UpdateEntry {
+                source_key: source_key.clone(),
+                source: source.clone(),
+                latest_revision: latest,
+            });
+        }
     }
 
-    if request.skills.is_empty() {
-        ui::info("No skills to check.");
-        return Ok(());
-    }
-
-    let client = reqwest::blocking::Client::new();
-    let res = client.post(CHECK_UPDATES_API_URL).json(&request).send()?;
-    if !res.status().is_success() {
-        return Err(SkillzError::Message(format!("API error: {}", res.status())));
-    }
-
-    let data: CheckUpdatesResponse = res.json()?;
-    if data.updates.is_empty() {
+    if updates.is_empty() {
         ui::success("All skills are up to date");
         return Ok(());
     }
 
-    ui::heading(&format!("Found {} update(s)", data.updates.len()));
+    ui::heading(&format!("Found {} update(s)", updates.len()));
 
     let mut success = 0usize;
     let mut failed = 0usize;
 
-    for update in data.updates {
-        let Some(entry) = lock.skills.get(&update.name) else {
-            continue;
-        };
-        ui::info(&format!("Updating {}...", update.name));
+    for update in updates {
+        ui::info(&format!("Updating {}...", update.source_key));
 
         let args = AddArgs {
-            source: entry.source_url.clone(),
-            global: true,
+            source: update.source_key.clone(),
+            global: location.is_global,
             copy: false,
             agent: vec![],
-            skill: vec![update.name.clone()],
+            skill: update.source.skills.clone(),
             list: false,
             yes: true,
             all: false,
@@ -670,16 +652,19 @@ pub fn run_update() -> Result<()> {
         match run_add(args) {
             Ok(_) => {
                 success += 1;
-                ui::info(&format!("  Updated {}", update.name));
+                ui::info(&format!("  Updated {}", update.source_key));
             }
             Err(err) => {
                 failed += 1;
-                ui::warn(&format!("  Failed to update {}: {}", update.name, err));
+                ui::warn(&format!("  Failed to update {}: {}", update.source_key, err));
             }
         }
     }
 
-    ui::success(&format!("Updated {} skill(s), {} failed", success, failed));
+    ui::success(&format!(
+        "Updated {} source(s), {} failed",
+        success, failed
+    ));
     Ok(())
 }
 
