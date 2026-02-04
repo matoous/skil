@@ -5,6 +5,7 @@ use walkdir::WalkDir;
 
 use crate::error::Result;
 
+/// Parsed skill metadata and file location.
 #[derive(Debug, Clone)]
 pub struct Skill {
     pub name: String,
@@ -13,12 +14,14 @@ pub struct Skill {
     pub raw_content: String,
 }
 
+/// Frontmatter structure for SKILL.md.
 #[derive(Debug, Deserialize)]
 pub struct Frontmatter {
     pub name: Option<String>,
     pub description: Option<String>,
 }
 
+/// Discovers skills in a repository or directory tree.
 pub fn discover_skills(
     base: &Path,
     subpath: Option<&Path>,
@@ -77,6 +80,7 @@ pub fn discover_skills(
     Ok(skills)
 }
 
+/// Filters skills by requested names (case-insensitive).
 pub fn select_skills(skills: &[Skill], requested: &[String]) -> Vec<Skill> {
     if requested.is_empty() || (requested.len() == 1 && requested[0] == "*") {
         return skills.to_vec();
@@ -96,6 +100,7 @@ pub fn select_skills(skills: &[Skill], requested: &[String]) -> Vec<Skill> {
     selected
 }
 
+/// Returns a prioritized list of directories to scan for skills.
 fn priority_skill_dirs(base: &Path) -> Vec<PathBuf> {
     vec![
         base.to_path_buf(),
@@ -127,10 +132,12 @@ fn priority_skill_dirs(base: &Path) -> Vec<PathBuf> {
     ]
 }
 
+/// Checks if a directory contains a SKILL.md file.
 fn has_skill_md(dir: &Path) -> bool {
     dir.join("SKILL.md").is_file()
 }
 
+/// Parses a SKILL.md file into a Skill if valid.
 pub fn parse_skill_md(path: &Path) -> Result<Option<Skill>> {
     let content = std::fs::read_to_string(path)?;
     let frontmatter = parse_frontmatter(&content)?;
@@ -152,6 +159,7 @@ pub fn parse_skill_md(path: &Path) -> Result<Option<Skill>> {
     }))
 }
 
+/// Parses YAML frontmatter from SKILL.md content.
 pub fn parse_frontmatter(content: &str) -> Result<Option<Frontmatter>> {
     let mut lines = content.lines();
     let first = lines.next().unwrap_or("");

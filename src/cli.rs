@@ -1,5 +1,6 @@
 use clap::{Args, Parser, Subcommand};
 
+/// CLI argument parser definition.
 #[derive(Parser)]
 #[command(
     name = "skills",
@@ -11,6 +12,7 @@ pub struct Cli {
     pub command: Option<Command>,
 }
 
+/// Top-level CLI commands.
 #[derive(Subcommand)]
 pub enum Command {
     #[command(aliases = ["a", "install", "i"])]
@@ -27,6 +29,7 @@ pub enum Command {
     Init(InitArgs),
 }
 
+/// Arguments for `skills add`.
 #[derive(Args, Clone)]
 pub struct AddArgs {
     pub source: String,
@@ -48,6 +51,7 @@ pub struct AddArgs {
     pub full_depth: bool,
 }
 
+/// Arguments for `skills remove`.
 #[derive(Args, Clone)]
 pub struct RemoveArgs {
     pub skills: Vec<String>,
@@ -63,6 +67,7 @@ pub struct RemoveArgs {
     pub all: bool,
 }
 
+/// Arguments for `skills list`.
 #[derive(Args, Clone)]
 pub struct ListArgs {
     #[arg(short = 'g', long = "global")]
@@ -71,11 +76,13 @@ pub struct ListArgs {
     pub agent: Vec<String>,
 }
 
+/// Arguments for `skills find`.
 #[derive(Args, Clone)]
 pub struct FindArgs {
     pub query: Option<String>,
 }
 
+/// Arguments for `skills init`.
 #[derive(Args, Clone)]
 pub struct InitArgs {
     pub name: Option<String>,

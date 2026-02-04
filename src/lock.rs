@@ -12,6 +12,7 @@ const AGENTS_DIR: &str = ".agents";
 const LOCK_FILE: &str = ".skill-lock.json";
 const LOCK_VERSION: u32 = 3;
 
+/// Entry for a single installed skill in the lock file.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SkillLockEntry {
     pub source: String,
@@ -31,12 +32,14 @@ pub struct SkillLockEntry {
     pub updated_at: String,
 }
 
+/// Lock file structure tracking installed skills.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SkillLockFile {
     pub version: u32,
     pub skills: BTreeMap<String, SkillLockEntry>,
 }
 
+/// Adds or updates a skill entry in the lock file.
 pub fn update_lock_for_skill(skill: &Skill, info: &SourceInfo, base_path: &Path) -> Result<()> {
     let mut lock = read_lock()?;
     let now = Utc::now().to_rfc3339();
@@ -79,6 +82,7 @@ pub fn update_lock_for_skill(skill: &Skill, info: &SourceInfo, base_path: &Path)
     Ok(())
 }
 
+/// Reads the lock file, resetting on incompatible versions.
 pub fn read_lock() -> Result<SkillLockFile> {
     let path = lock_path()?;
     if !path.exists() {
@@ -103,6 +107,7 @@ pub fn read_lock() -> Result<SkillLockFile> {
     Ok(lock)
 }
 
+/// Writes the lock file to disk.
 fn write_lock(lock: &SkillLockFile) -> Result<()> {
     let path = lock_path()?;
     if let Some(parent) = path.parent() {
@@ -113,11 +118,13 @@ fn write_lock(lock: &SkillLockFile) -> Result<()> {
     Ok(())
 }
 
+/// Returns the full path to the lock file.
 fn lock_path() -> Result<PathBuf> {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     Ok(home.join(AGENTS_DIR).join(LOCK_FILE))
 }
 
+/// Removes a skill entry from the lock file.
 pub fn remove_lock_entry(skill_name: &str) -> Result<()> {
     let mut lock = read_lock()?;
     if lock.skills.remove(skill_name).is_some() {
@@ -126,6 +133,7 @@ pub fn remove_lock_entry(skill_name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Fetches a remote folder tree hash for update checks.
 pub fn fetch_skill_folder_hash(
     owner_repo: &str,
     branch: Option<&str>,

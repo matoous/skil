@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+/// Configuration for a supported agent and its skills directories.
 #[derive(Debug, Clone)]
 pub struct AgentConfig {
     pub name: &'static str,
@@ -8,6 +9,7 @@ pub struct AgentConfig {
     pub global_skills_dir: String,
 }
 
+/// Returns the full list of known agents with resolved paths.
 pub fn agent_configs() -> Vec<AgentConfig> {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     let config_home = std::env::var("XDG_CONFIG_HOME")
@@ -84,6 +86,7 @@ pub fn agent_configs() -> Vec<AgentConfig> {
     ]
 }
 
+/// Resolves requested agent names to configs, with defaults if empty.
 pub fn resolve_agents(requested: &[String]) -> Vec<AgentConfig> {
     let all_agents = agent_configs();
 
@@ -105,6 +108,7 @@ pub fn resolve_agents(requested: &[String]) -> Vec<AgentConfig> {
     selected
 }
 
+/// Detects a reasonable default set of agents based on local config folders.
 fn detect_default_agents(all_agents: &[AgentConfig]) -> Vec<AgentConfig> {
     let mut detected = Vec::new();
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));

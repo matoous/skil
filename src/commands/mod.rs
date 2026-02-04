@@ -134,6 +134,7 @@ fn prompt_for_agents() -> Result<Vec<String>> {
     Ok(selected)
 }
 
+/// Initializes a new SKILL.md file in the current or named directory.
 pub fn run_init(args: InitArgs) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let has_name = args.name.is_some();
@@ -175,6 +176,7 @@ pub fn run_init(args: InitArgs) -> Result<()> {
     Ok(())
 }
 
+/// Installs skills from a local path or git source.
 pub fn run_add(mut args: AddArgs) -> Result<()> {
     if args.all {
         args.skill = vec!["*".to_string()];
@@ -321,6 +323,7 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
     Ok(())
 }
 
+/// Removes installed skills from agent directories.
 pub fn run_remove(mut args: RemoveArgs) -> Result<()> {
     if args.all {
         args.skill = vec!["*".to_string()];
@@ -337,9 +340,45 @@ pub fn run_remove(mut args: RemoveArgs) -> Result<()> {
     }
 
     let skill_names = if requested_skills.is_empty() {
-        return Err(SkillzError::Message(
-            "No skills provided (interactive remove is not supported)".to_string(),
-        ));
+        if !console::Term::stdout().is_term() {
+            return Err(SkillzError::Message(
+                "No skills provided (interactive remove requires a TTY)".to_string(),
+            ));
+        }
+
+        let mut names = std::collections::BTreeSet::new();
+        for agent in &agents {
+            let base = agent_skills_base(agent, args.global)?;
+            if !base.exists() {
+                continue;
+            }
+            for entry in std::fs::read_dir(&base)? {
+                let entry = entry?;
+                if entry.path().is_dir() {
+                    if let Some(skill) = parse_skill_md(&entry.path().join("SKILL.md"))? {
+                        names.insert(skill.name);
+                    } else if let Some(name) = entry.file_name().to_str() {
+                        names.insert(name.to_string());
+                    }
+                }
+            }
+        }
+
+        if names.is_empty() {
+            return Err(SkillzError::Message("No skills available to remove".to_string()));
+        }
+
+        let items: Vec<String> = names.into_iter().collect();
+        let selection = dialoguer::MultiSelect::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select skills to remove")
+            .items(&items)
+            .max_length(12)
+            .interact()
+            .map_err(|err| SkillzError::Message(err.to_string()))?;
+        if selection.is_empty() {
+            return Err(SkillzError::Message("No skills selected".to_string()));
+        }
+        selection.into_iter().map(|idx| items[idx].clone()).collect()
     } else {
         requested_skills
     };
@@ -378,6 +417,7 @@ pub fn run_remove(mut args: RemoveArgs) -> Result<()> {
     Ok(())
 }
 
+/// Lists installed skills for agents or the canonical store.
 pub fn run_list(args: ListArgs) -> Result<()> {
     if args.agent.is_empty() {
         let canonical = canonical_skills_dir(args.global)?;
@@ -469,6 +509,7 @@ pub fn run_list(args: ListArgs) -> Result<()> {
     Ok(())
 }
 
+/// Searches for skills using the remote registry API.
 pub fn run_find(args: FindArgs) -> Result<()> {
     let Some(query) = args.query else {
         ui::info("Usage: skills find <query>");
@@ -512,6 +553,7 @@ pub fn run_find(args: FindArgs) -> Result<()> {
     Ok(())
 }
 
+/// Checks for updates for skills tracked in the lock file.
 pub fn run_check() -> Result<()> {
     ui::info("Checking for skill updates...");
     let lock = read_lock()?;
@@ -563,6 +605,7 @@ pub fn run_check() -> Result<()> {
     Ok(())
 }
 
+/// Updates all skills that have updates available.
 pub fn run_update() -> Result<()> {
     ui::info("Checking for skill updates...");
     let lock = read_lock()?;

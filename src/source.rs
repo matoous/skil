@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crate::error::{Result, SkillzError};
 
+/// Source metadata used for lock file and updates.
 #[derive(Debug, Clone)]
 pub struct SourceInfo {
     pub source_id: String,
@@ -12,6 +13,7 @@ pub struct SourceInfo {
     pub github_branch: Option<String>,
 }
 
+/// A parsed source, either local or git-based.
 #[derive(Debug, Clone)]
 pub enum Source {
     Local {
@@ -24,6 +26,7 @@ pub enum Source {
     },
 }
 
+/// Parses a user-provided source string into a concrete source.
 pub fn parse_source(source: &str) -> Result<Source> {
     if is_local_path(source) {
         let source_path = PathBuf::from(source);
@@ -50,10 +53,12 @@ pub fn parse_source(source: &str) -> Result<Source> {
     parse_owner_repo(source)
 }
 
+/// Heuristic for URL-like sources (http/ssh git).
 fn looks_like_url(source: &str) -> bool {
     source.contains("://") || source.starts_with("git@")
 }
 
+/// Returns true if the input is clearly a local filesystem path.
 fn is_local_path(source: &str) -> bool {
     source.starts_with("./")
         || source.starts_with("../")
@@ -74,6 +79,7 @@ fn is_local_path(source: &str) -> bool {
             .unwrap_or(false)
 }
 
+/// Parses GitHub-style owner/repo and optional subpath.
 fn parse_owner_repo(source: &str) -> Result<Source> {
     let parts: Vec<&str> = source.split('/').filter(|s| !s.is_empty()).collect();
     if parts.len() < 2 {
@@ -106,6 +112,7 @@ fn parse_owner_repo(source: &str) -> Result<Source> {
     })
 }
 
+/// Parses supported hosted git URLs into a source.
 fn parse_git_url(source: &str) -> Result<Source> {
     if let Some((url, subpath, owner_repo, branch, source_type)) = parse_hosted_git_url(source) {
         return Ok(Source::Git {
@@ -136,8 +143,10 @@ fn parse_git_url(source: &str) -> Result<Source> {
     })
 }
 
+/// Parsed GitHub URL tuple: repo URL, subpath, owner/repo, branch.
 type ParsedGithubTreeUrl = (String, Option<PathBuf>, Option<String>, Option<String>);
 
+/// Parses GitHub URLs with optional tree/blob paths.
 pub fn parse_github_tree_url(source: &str) -> Option<ParsedGithubTreeUrl> {
     let source = source.trim_end_matches('/');
 
@@ -186,6 +195,7 @@ pub fn parse_github_tree_url(source: &str) -> Option<ParsedGithubTreeUrl> {
     None
 }
 
+/// Extracts owner/repo for GitHub URLs when possible.
 fn parse_github_owner_repo(source: &str) -> Option<String> {
     if let Some((_, _, owner_repo, _)) = parse_github_tree_url(source) {
         return owner_repo;
@@ -194,8 +204,10 @@ fn parse_github_owner_repo(source: &str) -> Option<String> {
     None
 }
 
+/// Parsed hosted git tuple: repo URL, subpath, owner/repo, branch, source type.
 type ParsedHostedGitUrl = (String, Option<PathBuf>, Option<String>, Option<String>, String);
 
+/// Parses supported hosted git providers (GitHub, GitLab, Codeberg).
 pub fn parse_hosted_git_url(source: &str) -> Option<ParsedHostedGitUrl> {
     if let Some((url, subpath, owner_repo, branch)) = parse_github_tree_url(source) {
         return Some((
@@ -230,6 +242,7 @@ pub fn parse_hosted_git_url(source: &str) -> Option<ParsedHostedGitUrl> {
     None
 }
 
+/// Parses GitLab URLs with optional tree paths.
 fn parse_gitlab_tree_url(source: &str) -> Option<ParsedGithubTreeUrl> {
     let source = source.trim_end_matches('/');
 
@@ -278,6 +291,7 @@ fn parse_gitlab_tree_url(source: &str) -> Option<ParsedGithubTreeUrl> {
     None
 }
 
+/// Parses Codeberg URLs with optional branch paths.
 fn parse_codeberg_tree_url(source: &str) -> Option<ParsedGithubTreeUrl> {
     let source = source.trim_end_matches('/');
 

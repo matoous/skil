@@ -6,6 +6,7 @@ use crate::agent::AgentConfig;
 use crate::error::Result;
 use crate::skill::Skill;
 
+/// Installation strategy for agent skill directories.
 #[derive(Clone, Copy)]
 pub enum InstallMode {
     Symlink,
@@ -15,6 +16,7 @@ pub enum InstallMode {
 const AGENTS_DIR: &str = ".agents";
 const SKILLS_SUBDIR: &str = "skills";
 
+/// Installs a skill into the canonical store and agent directories.
 pub fn install_skill(
     skill: &Skill,
     agent: &AgentConfig,
@@ -59,6 +61,7 @@ pub fn install_skill(
     Ok(())
 }
 
+/// Returns the canonical skill storage directory for a scope.
 pub fn canonical_skills_dir(global: bool) -> Result<PathBuf> {
     if global {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -69,6 +72,7 @@ pub fn canonical_skills_dir(global: bool) -> Result<PathBuf> {
     }
 }
 
+/// Returns the base skills directory for a given agent.
 pub fn agent_skills_base(agent: &AgentConfig, global: bool) -> Result<PathBuf> {
     if global {
         Ok(PathBuf::from(agent.global_skills_dir.as_str()))
@@ -78,6 +82,7 @@ pub fn agent_skills_base(agent: &AgentConfig, global: bool) -> Result<PathBuf> {
     }
 }
 
+/// Recursively copies a directory, skipping ignored folders.
 fn copy_dir(from: &Path, to: &Path) -> Result<()> {
     for entry in WalkDir::new(from) {
         let entry = entry?;
@@ -98,6 +103,7 @@ fn copy_dir(from: &Path, to: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Checks whether a path should be skipped during copy.
 fn should_skip_path(root: &Path, path: &Path) -> bool {
     let rel = path.strip_prefix(root).unwrap_or(path);
     let mut components = rel.components().filter_map(|c| c.as_os_str().to_str());
@@ -117,6 +123,7 @@ fn should_skip_path(root: &Path, path: &Path) -> bool {
     false
 }
 
+/// Returns true for directories that should never be copied.
 fn should_skip_component(component: &str) -> bool {
     matches!(
         component,
@@ -124,6 +131,7 @@ fn should_skip_component(component: &str) -> bool {
     )
 }
 
+/// Creates a directory symlink, replacing any existing path.
 fn create_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
     if link.exists() {
         if link.is_dir() {
@@ -148,6 +156,7 @@ fn create_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
     }
 }
 
+/// Normalizes a skill name to a safe directory name.
 pub fn sanitize_name(name: &str) -> String {
     let mut out = String::new();
     let mut prev_dash = false;

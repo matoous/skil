@@ -14,6 +14,7 @@ pub mod ui;
 
 pub use error::{Result, SkillzError};
 
+/// Entry point for the CLI command dispatch.
 pub fn run() -> Result<()> {
     use clap::Parser;
     let cli = cli::Cli::parse();
@@ -33,6 +34,7 @@ pub fn run() -> Result<()> {
     }
 }
 
+/// Prints the CLI help output when no command is provided.
 fn print_help() {
     ui::heading("skills");
     println!("The CLI for the open agent skills ecosystem\n");
