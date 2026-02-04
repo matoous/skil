@@ -1,4 +1,4 @@
-use chrono::Utc;
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -42,7 +42,7 @@ pub struct SkillLockFile {
 /// Adds or updates a skill entry in the lock file.
 pub fn update_lock_for_skill(skill: &Skill, info: &SourceInfo, base_path: &Path) -> Result<()> {
     let mut lock = read_lock()?;
-    let now = Utc::now().to_rfc3339();
+    let now = Timestamp::now().to_string();
 
     let skill_path = skill
         .path
