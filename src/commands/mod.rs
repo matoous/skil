@@ -1,0 +1,645 @@
+use std::path::{Path, PathBuf};
+
+use crate::agent::{agent_configs, resolve_agents};
+use crate::cli::{AddArgs, FindArgs, InitArgs, ListArgs, RemoveArgs};
+use crate::error::{Result, SkillzError};
+use crate::git::clone_repo;
+use crate::install::{
+    agent_skills_base, canonical_skills_dir, install_skill, sanitize_name, InstallMode,
+};
+use crate::lock::{read_lock, remove_lock_entry, update_lock_for_skill};
+use crate::skill::{discover_skills, parse_skill_md, select_skills};
+use crate::source::{parse_source, Source};
+use crate::ui;
+use dialoguer::theme::ColorfulTheme;
+use std::collections::HashSet;
+
+const CHECK_UPDATES_API_URL: &str = "https://add-skill.vercel.sh/check-updates";
+const SEARCH_API_BASE: &str = "https://skills.sh";
+
+#[derive(Debug, serde::Deserialize)]
+struct SearchApiResponse {
+    skills: Vec<SearchApiSkill>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct SearchApiSkill {
+    name: String,
+    installs: Option<u64>,
+    source: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct CheckUpdatesResponse {
+    updates: Vec<CheckUpdatesEntry>,
+    errors: Option<Vec<CheckUpdatesError>>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct CheckUpdatesEntry {
+    name: String,
+    source: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[allow(dead_code)]
+struct CheckUpdatesError {
+    name: String,
+    source: String,
+    error: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct CheckUpdatesRequest {
+    skills: Vec<CheckUpdatesRequestSkill>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct CheckUpdatesRequestSkill {
+    name: String,
+    source: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path: Option<String>,
+    #[serde(rename = "skillFolderHash")]
+    skill_folder_hash: String,
+}
+
+fn prompt_for_skills(skills: &[crate::skill::Skill]) -> Result<Vec<String>> {
+    let max_width = console::Term::stdout().size().1 as usize;
+    let items: Vec<String> = skills
+        .iter()
+        .map(|s| format_skill_line(&s.name, &s.description, max_width))
+        .collect();
+    if items.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let selection = dialoguer::MultiSelect::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select skills to install")
+        .items(&items)
+        .max_length(12)
+        .interact()
+        .map_err(|err| SkillzError::Message(err.to_string()))?;
+    let selected = selection
+        .into_iter()
+        .map(|idx| skills[idx].name.clone())
+        .collect();
+    Ok(selected)
+}
+
+fn format_skill_line(name: &str, description: &str, max_width: usize) -> String {
+    let sep = " — ";
+    if max_width == 0 {
+        return format!("{}{sep}{}", console::style(name).bold(), console::style(description).dim());
+    }
+
+    let max_len = max_width.saturating_sub(4).max(20);
+    let name_len = name.chars().count();
+    let sep_len = sep.chars().count();
+    let available = max_len.saturating_sub(name_len + sep_len);
+    if available == 0 {
+        return format!("{}", console::style(name).bold());
+    }
+    let mut desc = description.to_string();
+    if desc.chars().count() > available {
+        let take = available.saturating_sub(3);
+        desc = desc.chars().take(take).collect();
+        desc.push_str("...");
+    }
+
+    format!(
+        "{}{}{}",
+        console::style(name).bold(),
+        console::style(sep).dim(),
+        console::style(desc).dim()
+    )
+}
+
+fn prompt_for_agents() -> Result<Vec<String>> {
+    let agents = agent_configs();
+    let items: Vec<String> = agents.iter().map(|a| a.display_name.to_string()).collect();
+    if items.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let selection = dialoguer::MultiSelect::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select agents to install to")
+        .items(&items)
+        .interact()
+        .map_err(|err| SkillzError::Message(err.to_string()))?;
+    let selected = selection
+        .into_iter()
+        .map(|idx| agents[idx].name.to_string())
+        .collect();
+    Ok(selected)
+}
+
+pub fn run_init(args: InitArgs) -> Result<()> {
+    let cwd = std::env::current_dir()?;
+    let has_name = args.name.is_some();
+    let skill_name = args.name.clone().unwrap_or_else(|| {
+        cwd.file_name()
+            .and_then(std::ffi::OsStr::to_str)
+            .unwrap_or("skill")
+            .to_string()
+    });
+
+    let skill_dir = if has_name {
+        cwd.join(&skill_name)
+    } else {
+        cwd.clone()
+    };
+    let skill_file = skill_dir.join("SKILL.md");
+
+    if skill_file.exists() {
+        ui::warn(&format!(
+            "Skill already exists at {}",
+            display_path(&skill_file)
+        ));
+        return Ok(());
+    }
+
+    if has_name {
+        std::fs::create_dir_all(&skill_dir)?;
+    }
+
+    let content = format!(
+        "---\nname: {name}\ndescription: A brief description of what this skill does\n---\n\n# {name}\n\nInstructions for the agent to follow when this skill is activated.\n\n## When to use\n\nDescribe when this skill should be used.\n\n## Instructions\n\n1. First step\n2. Second step\n3. Additional steps as needed\n",
+        name = skill_name
+    );
+
+    std::fs::write(&skill_file, content)?;
+
+    ui::success(&format!("Initialized skill: {}", skill_name));
+    ui::info(&format!("Created: {}", display_path(&skill_file)));
+    Ok(())
+}
+
+pub fn run_add(mut args: AddArgs) -> Result<()> {
+    if args.all {
+        args.skill = vec!["*".to_string()];
+        args.agent = vec!["*".to_string()];
+        args.yes = true;
+    }
+
+    let source = parse_source(&args.source)?;
+
+    let should_prompt_agents = !args.list;
+    if should_prompt_agents && args.agent.is_empty() && !args.yes {
+        args.agent = prompt_for_agents()?;
+    }
+
+    if should_prompt_agents && !(args.agent.is_empty() || (args.agent.len() == 1 && args.agent[0] == "*")) {
+        let valid: HashSet<&str> = agent_configs().iter().map(|a| a.name).collect();
+        let invalid: Vec<String> = args
+            .agent
+            .iter()
+            .filter(|name| !valid.contains(name.as_str()))
+            .cloned()
+            .collect();
+        if !invalid.is_empty() {
+            let valid_list = agent_configs()
+                .iter()
+                .map(|a| a.name)
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(SkillzError::Message(format!(
+                "Invalid agents: {}. Valid agents: {}",
+                invalid.join(", "),
+                valid_list
+            )));
+        }
+    }
+
+    let agents = if should_prompt_agents {
+        let agents = resolve_agents(&args.agent);
+        if agents.is_empty() {
+            return Err(SkillzError::Message("No agents selected".to_string()));
+        }
+        agents
+    } else {
+        Vec::new()
+    };
+
+    let supports_global = agents
+        .iter()
+        .any(|agent| !agent.global_skills_dir.is_empty());
+    let mut install_global = args.global;
+    if should_prompt_agents && supports_global && !args.global && !args.yes {
+        let selection = dialoguer::Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Installation scope")
+            .items(&["Project (current directory)", "Global (home directory)"])
+            .default(0)
+            .interact()
+            .map_err(|err| SkillzError::Message(err.to_string()))?;
+        install_global = selection == 1;
+    }
+
+    let mut install_mode = if args.copy {
+        InstallMode::Copy
+    } else {
+        InstallMode::Symlink
+    };
+    if should_prompt_agents && !args.yes && !args.copy {
+        let selection = dialoguer::Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Installation method")
+            .items(&["Symlink (recommended)", "Copy to each agent"])
+            .default(0)
+            .interact()
+            .map_err(|err| SkillzError::Message(err.to_string()))?;
+        if selection == 1 {
+            install_mode = InstallMode::Copy;
+        }
+    }
+
+    let (base_path, _temp): (PathBuf, Option<tempfile::TempDir>) = match &source {
+        Source::Local { path } => (path.clone(), None),
+        Source::Git { url, .. } => {
+            let temp_dir = tempfile::tempdir()?;
+            let spinner = ui::spinner("Cloning repository...");
+            let result = clone_repo(url, temp_dir.path());
+            match result {
+                Ok(()) => spinner.finish_with_message("Repository cloned"),
+                Err(err) => {
+                    spinner.finish_with_message("Repository clone failed");
+                    return Err(err);
+                }
+            }
+            (temp_dir.path().to_path_buf(), Some(temp_dir))
+        }
+    };
+
+    let (subpath, source_info) = match &source {
+        Source::Local { .. } => (None, None),
+        Source::Git { subpath, info, .. } => (subpath.clone(), Some(info.clone())),
+    };
+
+    let skills = discover_skills(&base_path, subpath.as_deref(), args.full_depth)?;
+
+    if skills.is_empty() {
+        return Err(SkillzError::Message(
+            "No skills found in source".to_string(),
+        ));
+    }
+
+    if args.list {
+        ui::heading("Available skills");
+        for skill in &skills {
+            ui::list_item(&format!("{}: {}", skill.name, skill.description));
+        }
+        return Ok(());
+    }
+
+    if args.skill.is_empty() && !args.yes {
+        args.skill = prompt_for_skills(&skills)?;
+    }
+
+    let selected_skills = select_skills(&skills, &args.skill);
+    if selected_skills.is_empty() {
+        return Err(SkillzError::Message(
+            "No matching skills selected".to_string(),
+        ));
+    }
+
+    let install_spinner = ui::spinner("Installing skills...");
+    for skill in &selected_skills {
+        for agent in &agents {
+            install_skill(skill, agent, install_global, install_mode)?;
+        }
+
+        if let Some(info) = source_info.clone() {
+            update_lock_for_skill(skill, &info, &base_path)?;
+        }
+    }
+    install_spinner.finish_with_message("Installation complete");
+
+    ui::success(&format!(
+        "Installed {} skill(s) to {} agent(s)",
+        selected_skills.len(),
+        agents.len()
+    ));
+    Ok(())
+}
+
+pub fn run_remove(mut args: RemoveArgs) -> Result<()> {
+    if args.all {
+        args.skill = vec!["*".to_string()];
+        args.agent = vec!["*".to_string()];
+        args.yes = true;
+    }
+
+    let mut requested_skills = args.skills.clone();
+    requested_skills.extend(args.skill.clone());
+
+    let agents = resolve_agents(&args.agent);
+    if agents.is_empty() {
+        return Err(SkillzError::Message("No agents selected".to_string()));
+    }
+
+    let skill_names = if requested_skills.is_empty() {
+        return Err(SkillzError::Message(
+            "No skills provided (interactive remove is not supported)".to_string(),
+        ));
+    } else {
+        requested_skills
+    };
+
+    let mut removed = 0usize;
+
+    for agent in &agents {
+        let base = agent_skills_base(agent, args.global)?;
+        if !base.exists() {
+            continue;
+        }
+
+        if skill_names.len() == 1 && skill_names[0] == "*" {
+            for entry in std::fs::read_dir(&base)? {
+                let entry = entry?;
+                if entry.path().is_dir() {
+                    std::fs::remove_dir_all(entry.path())?;
+                    removed += 1;
+                }
+            }
+            continue;
+        }
+
+        for name in &skill_names {
+            let sanitized = sanitize_name(name);
+            let target = base.join(&sanitized);
+            if target.exists() {
+                std::fs::remove_dir_all(&target)?;
+                removed += 1;
+                remove_lock_entry(name).ok();
+            }
+        }
+    }
+
+    ui::success(&format!("Removed {} skill(s)", removed));
+    Ok(())
+}
+
+pub fn run_list(args: ListArgs) -> Result<()> {
+    if args.agent.is_empty() {
+        let canonical = canonical_skills_dir(args.global)?;
+        if canonical.exists() {
+            let mut names = Vec::new();
+            for entry in std::fs::read_dir(&canonical)? {
+                let entry = entry?;
+                if entry.path().is_dir() {
+                    if let Some(skill) = parse_skill_md(&entry.path().join("SKILL.md"))? {
+                        names.push(skill.name);
+                    } else if let Some(name) = entry.file_name().to_str() {
+                        names.push(name.to_string());
+                    }
+                }
+            }
+
+            if !names.is_empty() {
+                ui::heading("Skills");
+                names.sort();
+                for name in names {
+                    ui::list_item(&name);
+                }
+                return Ok(());
+            }
+        }
+
+        if !args.global {
+            let global_canonical = canonical_skills_dir(true)?;
+            if global_canonical.exists() {
+                let mut names = Vec::new();
+                for entry in std::fs::read_dir(&global_canonical)? {
+                    let entry = entry?;
+                    if entry.path().is_dir() {
+                        if let Some(skill) = parse_skill_md(&entry.path().join("SKILL.md"))? {
+                            names.push(skill.name);
+                        } else if let Some(name) = entry.file_name().to_str() {
+                            names.push(name.to_string());
+                        }
+                    }
+                }
+
+                if !names.is_empty() {
+                    ui::heading("Global skills (use -g to list directly)");
+                    names.sort();
+                    for name in names {
+                        ui::list_item(&name);
+                    }
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    let agents = resolve_agents(&args.agent);
+    if agents.is_empty() {
+        return Err(SkillzError::Message("No agents selected".to_string()));
+    }
+
+    for agent in agents {
+        let base = agent_skills_base(&agent, args.global)?;
+        ui::heading(&format!("{}:", agent.display_name));
+        if !base.exists() {
+            ui::info("  (no skills installed)");
+            continue;
+        }
+
+        let mut names = Vec::new();
+        for entry in std::fs::read_dir(base)? {
+            let entry = entry?;
+            if entry.path().is_dir() {
+                if let Some(skill) = parse_skill_md(&entry.path().join("SKILL.md"))? {
+                    names.push(skill.name);
+                } else if let Some(name) = entry.file_name().to_str() {
+                    names.push(name.to_string());
+                }
+            }
+        }
+
+        if names.is_empty() {
+            ui::info("  (no skills installed)");
+        } else {
+            names.sort();
+            for name in names {
+                ui::list_item(&name);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub fn run_find(args: FindArgs) -> Result<()> {
+    let Some(query) = args.query else {
+        ui::info("Usage: skills find <query>");
+        ui::info("Tip: use `skills find typescript`");
+        return Ok(());
+    };
+
+    let url = format!(
+        "{}/api/search?q={}&limit=10",
+        SEARCH_API_BASE,
+        urlencoding::encode(&query)
+    );
+    let res = reqwest::blocking::get(url)?;
+    if !res.status().is_success() {
+        ui::warn(&format!("Search failed: {}", res.status()));
+        return Ok(());
+    }
+
+    let data: SearchApiResponse = res.json()?;
+    if data.skills.is_empty() {
+        ui::info("No skills found");
+        return Ok(());
+    }
+
+    ui::heading("Results");
+    for skill in data.skills {
+        let source = skill.source.clone().unwrap_or_default();
+        let installs = skill.installs.unwrap_or(0);
+        ui::list_item(&format!(
+            "{} ({}) - {} installs",
+            skill.name, source, installs
+        ));
+        if !source.is_empty() {
+            ui::info(&format!(
+                "  add: skills add {} --skill {}",
+                source, skill.name
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+pub fn run_check() -> Result<()> {
+    ui::info("Checking for skill updates...");
+    let lock = read_lock()?;
+    if lock.skills.is_empty() {
+        ui::info("No skills tracked in lock file.");
+        return Ok(());
+    }
+
+    let mut request = CheckUpdatesRequest { skills: vec![] };
+    for (name, entry) in &lock.skills {
+        if entry.skill_folder_hash.is_empty() {
+            continue;
+        }
+        request.skills.push(CheckUpdatesRequestSkill {
+            name: name.clone(),
+            source: entry.source.clone(),
+            path: entry.skill_path.clone(),
+            skill_folder_hash: entry.skill_folder_hash.clone(),
+        });
+    }
+
+    if request.skills.is_empty() {
+        ui::info("No skills to check.");
+        return Ok(());
+    }
+
+    let client = reqwest::blocking::Client::new();
+    let res = client.post(CHECK_UPDATES_API_URL).json(&request).send()?;
+    if !res.status().is_success() {
+        return Err(SkillzError::Message(format!("API error: {}", res.status())));
+    }
+
+    let data: CheckUpdatesResponse = res.json()?;
+    if data.updates.is_empty() {
+        ui::success("All skills are up to date");
+    } else {
+        ui::heading(&format!("{} update(s) available", data.updates.len()));
+        for update in data.updates {
+            ui::list_item(&format!("{} ({})", update.name, update.source));
+        }
+    }
+
+    if let Some(errors) = data.errors {
+        if !errors.is_empty() {
+            ui::warn(&format!("Could not check {} skill(s)", errors.len()));
+        }
+    }
+
+    Ok(())
+}
+
+pub fn run_update() -> Result<()> {
+    ui::info("Checking for skill updates...");
+    let lock = read_lock()?;
+    if lock.skills.is_empty() {
+        ui::info("No skills tracked in lock file.");
+        return Ok(());
+    }
+
+    let mut request = CheckUpdatesRequest { skills: vec![] };
+    for (name, entry) in &lock.skills {
+        if entry.skill_folder_hash.is_empty() {
+            continue;
+        }
+        request.skills.push(CheckUpdatesRequestSkill {
+            name: name.clone(),
+            source: entry.source.clone(),
+            path: entry.skill_path.clone(),
+            skill_folder_hash: entry.skill_folder_hash.clone(),
+        });
+    }
+
+    if request.skills.is_empty() {
+        ui::info("No skills to check.");
+        return Ok(());
+    }
+
+    let client = reqwest::blocking::Client::new();
+    let res = client.post(CHECK_UPDATES_API_URL).json(&request).send()?;
+    if !res.status().is_success() {
+        return Err(SkillzError::Message(format!("API error: {}", res.status())));
+    }
+
+    let data: CheckUpdatesResponse = res.json()?;
+    if data.updates.is_empty() {
+        ui::success("All skills are up to date");
+        return Ok(());
+    }
+
+    ui::heading(&format!("Found {} update(s)", data.updates.len()));
+
+    let mut success = 0usize;
+    let mut failed = 0usize;
+
+    for update in data.updates {
+        let Some(entry) = lock.skills.get(&update.name) else {
+            continue;
+        };
+        ui::info(&format!("Updating {}...", update.name));
+
+        let args = AddArgs {
+            source: entry.source_url.clone(),
+            global: true,
+            copy: false,
+            agent: vec![],
+            skill: vec![update.name.clone()],
+            list: false,
+            yes: true,
+            all: false,
+            full_depth: false,
+        };
+
+        match run_add(args) {
+            Ok(_) => {
+                success += 1;
+                ui::info(&format!("  Updated {}", update.name));
+            }
+            Err(err) => {
+                failed += 1;
+                ui::warn(&format!("  Failed to update {}: {}", update.name, err));
+            }
+        }
+    }
+
+    ui::success(&format!("Updated {} skill(s), {} failed", success, failed));
+    Ok(())
+}
+
+fn display_path(path: &Path) -> String {
+    path.to_string_lossy().to_string()
+}

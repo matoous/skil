@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c # v1.15.2
+        with:
+          components: rustfmt, clippy
+
+      - name: Check style
+        run: cargo fmt -- --check
+
+      - name: Run Clippy Lints
+        run: cargo clippy --all-targets -- --deny warnings --allow clippy::style
+
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Build
+        run: cargo build --locked --all-targets --verbose
+
+      - name: Test
+        run: cargo test --locked --verbose
+        env:
+          RUST_BACKTRACE: 1
