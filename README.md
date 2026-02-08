@@ -4,8 +4,9 @@
 
 A fast, friendly CLI for managing agent skills.
 
-![License](https://img.shields.io/github/license/matoous/skil)
-![Stars](https://img.shields.io/github/stars/matoous/skil?style=social)
+[![Version](https://img.shields.io/github/v/release/matoous/skil)](https://github.com/matoous/skil/releases)
+[![License](https://img.shields.io/github/license/matoous/skil)](https://github.com/matoous/skil/blob/main/LICENSE)
+[![Stars](https://img.shields.io/github/stars/matoous/skil)](https://github.com/matoous/skil)
 
 </div>
 
