@@ -2,6 +2,16 @@
 name = "skil"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
+description = "A fast, friendly CLI for managing agent skills."
+license = "MIT"
+repository = "https://github.com/matoous/skil"
+homepage = "https://github.com/matoous/skil"
+documentation = "https://docs.rs/skil"
+readme = "README.md"
+keywords = ["cli", "agent", "skills", "developer-tools"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = [".github/*", "target/*", "tests/*"]
 
 [[bin]]
 name = "skil"

@@ -11,6 +11,8 @@ A fast, friendly CLI for managing agent skills.
 
 Skil is a CLI tool that makes it easy to install, update, and organize agent skills from Git repositories or archives. It wraps the workflows around skill packages so developers and teams can share curated skill sets, keep them up to date, and bootstrap new agents quickly without manual copying or custom scripts.
 
+This tool is inspired by [vercel-labs/skills](https://github.com/vercel-labs/skills) but meant for those, that don't want to rely on javascript.
+
 ## Installation
 
 Install with Cargo:
@@ -151,20 +153,3 @@ Supported shells include: `bash`, `zsh`, `fish`, `elvish`, `powershell`.
 cargo build
 cargo run -- --help
 ```
-
-## Releases
-
-Releases are automated with `release-plz` via `.github/workflows/release-plz.yaml`.
-
-The workflow:
-- Opens/updates a release PR when commits land on `main`.
-- Publishes to crates.io and creates a GitHub release after the release PR is merged.
-
-Repository setup:
-- Add `CARGO_REGISTRY_TOKEN` in repository secrets (crates.io API token).
-- Keep GitHub Actions workflow permissions enabled for `contents: write` and `pull-requests: write`.
-
-## Notes
-
-- Interactive selection for skills/agents is supported when you omit `--skill` or `--agent`.
-- Agent list is a trimmed, common subset; expand in `src/agent.rs` if you need more.
