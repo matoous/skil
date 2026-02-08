@@ -3,7 +3,6 @@
 pub mod agent;
 
 mod cli;
-mod commands;
 mod config;
 mod error;
 mod git;
@@ -21,31 +20,13 @@ pub fn run() -> Result<()> {
     let cli = cli::Cli::parse();
 
     match cli.command {
-        None => {
-            print_help();
-            Ok(())
-        }
-        Some(cli::Command::Add(args)) => commands::run_add(args),
-        Some(cli::Command::Remove(args)) => commands::run_remove(args),
-        Some(cli::Command::List(args)) => commands::run_list(args),
-        Some(cli::Command::Find(args)) => commands::run_find(args),
-        Some(cli::Command::Check) => commands::run_check(),
-        Some(cli::Command::Update) => commands::run_update(),
-        Some(cli::Command::Init(args)) => commands::run_init(args),
+        cli::Command::Add(args) => cli::run_add(args),
+        cli::Command::Remove(args) => cli::run_remove(args),
+        cli::Command::List(args) => cli::run_list(args),
+        cli::Command::Find(args) => cli::run_find(args),
+        cli::Command::Check => cli::run_check(),
+        cli::Command::Update => cli::run_update(),
+        cli::Command::Init(args) => cli::run_init(args),
+        cli::Command::Completions(args) => cli::run_completions(args),
     }
-}
-
-/// Prints the CLI help output when no command is provided.
-fn print_help() {
-    ui::heading("skills");
-    println!("The CLI for the open agent skills ecosystem\n");
-    ui::info("Usage: skills <command> [options]\n");
-    ui::heading("Commands");
-    ui::list_item("add <package>     Add a skill package");
-    ui::list_item("remove [skills]   Remove installed skills");
-    ui::list_item("list, ls          List installed skills");
-    ui::list_item("find [query]      Search for skills by keyword");
-    ui::list_item("init [name]       Initialize a skill (creates <name>/SKILL.md or ./SKILL.md)");
-    ui::list_item("check             Check for available skill updates");
-    ui::list_item("update            Update all skills to latest versions");
 }

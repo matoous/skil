@@ -1,4 +1,4 @@
-use skillz::skill::parse_frontmatter;
+use skil::skill::parse_frontmatter;
 
 #[test]
 fn parses_frontmatter() {

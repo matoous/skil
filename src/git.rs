@@ -1,6 +1,6 @@
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
 use std::process::Command;
+use std::sync::atomic::AtomicBool;
 
 use crate::error::{Result, SkillzError};
 

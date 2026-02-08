@@ -205,38 +205,26 @@ fn parse_github_owner_repo(source: &str) -> Option<String> {
 }
 
 /// Parsed hosted git tuple: repo URL, subpath, owner/repo, branch, source type.
-type ParsedHostedGitUrl = (String, Option<PathBuf>, Option<String>, Option<String>, String);
+type ParsedHostedGitUrl = (
+    String,
+    Option<PathBuf>,
+    Option<String>,
+    Option<String>,
+    String,
+);
 
 /// Parses supported hosted git providers (GitHub, GitLab, Codeberg).
 pub fn parse_hosted_git_url(source: &str) -> Option<ParsedHostedGitUrl> {
     if let Some((url, subpath, owner_repo, branch)) = parse_github_tree_url(source) {
-        return Some((
-            url,
-            subpath,
-            owner_repo,
-            branch,
-            "github".to_string(),
-        ));
+        return Some((url, subpath, owner_repo, branch, "github".to_string()));
     }
 
     if let Some((url, subpath, owner_repo, branch)) = parse_gitlab_tree_url(source) {
-        return Some((
-            url,
-            subpath,
-            owner_repo,
-            branch,
-            "gitlab".to_string(),
-        ));
+        return Some((url, subpath, owner_repo, branch, "gitlab".to_string()));
     }
 
     if let Some((url, subpath, owner_repo, branch)) = parse_codeberg_tree_url(source) {
-        return Some((
-            url,
-            subpath,
-            owner_repo,
-            branch,
-            "codeberg".to_string(),
-        ));
+        return Some((url, subpath, owner_repo, branch, "codeberg".to_string()));
     }
 
     None

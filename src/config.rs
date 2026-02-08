@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 
 use crate::error::{Result, SkillzError};
 
-const CONFIG_DIR: &str = "skillz";
+const CONFIG_DIR: &str = "skil";
 const CONFIG_FILE: &str = "config.toml";
-const LOCAL_CONFIG_FILE: &str = ".skillz.toml";
+const LOCAL_CONFIG_FILE: &str = ".skil.toml";
 
 /// Persistent configuration for installed sources and skills.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]

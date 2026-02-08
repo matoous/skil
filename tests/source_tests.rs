@@ -1,4 +1,4 @@
-use skillz::source::{parse_github_tree_url, parse_hosted_git_url};
+use skil::source::{parse_github_tree_url, parse_hosted_git_url};
 
 #[test]
 fn parses_github_tree_url() {

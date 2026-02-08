@@ -1,4 +1,4 @@
-use skillz::install::sanitize_name;
+use skil::install::sanitize_name;
 
 #[test]
 fn sanitizes_names() {

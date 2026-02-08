@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// Error type for skillz operations.
+/// Error type for skil operations.
 #[derive(Error, Debug)]
 pub enum SkillzError {
     #[error("{0}")]
@@ -23,5 +23,5 @@ pub enum SkillzError {
     Walkdir(#[from] walkdir::Error),
 }
 
-/// Convenient result type for skillz APIs.
+/// Convenient result type for skil APIs.
 pub type Result<T> = std::result::Result<T, SkillzError>;

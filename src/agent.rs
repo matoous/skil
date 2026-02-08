@@ -129,7 +129,9 @@ fn detect_default_agents(all_agents: &[AgentConfig]) -> Vec<AgentConfig> {
     ];
 
     for (name, path) in default_candidates {
-        if path.exists() && let Some(agent) = all_agents.iter().find(|a| a.name == name) {
+        if path.exists()
+            && let Some(agent) = all_agents.iter().find(|a| a.name == name)
+        {
             detected.push(agent.clone());
         }
     }
