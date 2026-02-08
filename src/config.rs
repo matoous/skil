@@ -106,3 +106,86 @@ pub fn update_config(
     write_config(path, &config)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_config_returns_default_when_missing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let missing = dir.path().join("missing.toml");
+
+        let config = read_config(&missing).expect("read");
+        assert!(config.sources.is_empty());
+    }
+
+    #[test]
+    fn write_and_read_config_roundtrip() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("config.toml");
+
+        let mut config = SkillzConfig::default();
+        config.sources.insert(
+            "repo".to_string(),
+            SkillzSource {
+                source_type: "github".to_string(),
+                branch: Some("main".to_string()),
+                subpath: Some("skills".to_string()),
+                revision: Some("abc123".to_string()),
+                skills: vec!["one".to_string()],
+            },
+        );
+
+        write_config(&path, &config).expect("write");
+        let loaded = read_config(&path).expect("read");
+
+        let source = loaded.sources.get("repo").expect("repo source");
+        assert_eq!(source.source_type, "github");
+        assert_eq!(source.branch.as_deref(), Some("main"));
+        assert_eq!(source.subpath.as_deref(), Some("skills"));
+        assert_eq!(source.revision.as_deref(), Some("abc123"));
+        assert_eq!(source.skills, vec!["one"]);
+    }
+
+    #[test]
+    fn update_config_merges_skills_and_preserves_existing_revision() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("config.toml");
+        let source_key = "https://github.com/example/repo.git";
+        let source = SkillzSource {
+            source_type: "github".to_string(),
+            branch: Some("main".to_string()),
+            subpath: None,
+            revision: Some("rev-1".to_string()),
+            skills: vec!["alpha".to_string()],
+        };
+
+        update_config(
+            &path,
+            source_key,
+            source.clone(),
+            &[String::from("beta"), String::from("alpha")],
+            Some("rev-2".to_string()),
+        )
+        .expect("first update");
+
+        update_config(&path, source_key, source, &[String::from("gamma")], None)
+            .expect("second update");
+
+        let loaded = read_config(&path).expect("read");
+        let entry = loaded.sources.get(source_key).expect("source entry");
+
+        assert_eq!(entry.skills, vec!["alpha", "beta", "gamma"]);
+        assert_eq!(entry.revision.as_deref(), Some("rev-2"));
+        assert_eq!(entry.branch.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn local_config_location_uses_current_directory() {
+        let cwd = std::env::current_dir().expect("cwd");
+        let location = config_location(false).expect("location");
+        assert!(!location.is_global);
+        assert_eq!(location.path, cwd.join(".skil.toml"));
+    }
+}

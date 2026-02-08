@@ -144,3 +144,49 @@ fn detect_default_agents(all_agents: &[AgentConfig]) -> Vec<AgentConfig> {
 
     detected
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{agent_configs, resolve_agents};
+
+    #[test]
+    fn resolves_all_agents_with_wildcard() {
+        let all = agent_configs();
+        let selected = resolve_agents(&[String::from("*")]);
+        assert_eq!(selected.len(), all.len());
+    }
+
+    #[test]
+    fn resolves_only_requested_known_agents() {
+        let selected = resolve_agents(&[
+            String::from("codex"),
+            String::from("missing-agent"),
+            String::from("cursor"),
+        ]);
+        let names: Vec<&str> = selected.iter().map(|a| a.name).collect();
+        assert_eq!(names, vec!["codex", "cursor"]);
+    }
+
+    #[test]
+    fn resolves_defaults_to_non_empty_set() {
+        let selected = resolve_agents(&[]);
+        assert!(!selected.is_empty());
+    }
+
+    #[test]
+    fn resolve_agents_keeps_requested_order_for_known_agents() {
+        let selected = resolve_agents(&[
+            String::from("cursor"),
+            String::from("codex"),
+            String::from("goose"),
+        ]);
+        let names: Vec<&str> = selected.iter().map(|a| a.name).collect();
+        assert_eq!(names, vec!["cursor", "codex", "goose"]);
+    }
+
+    #[test]
+    fn resolve_agents_returns_empty_for_only_unknown_agents() {
+        let selected = resolve_agents(&[String::from("nope"), String::from("still-nope")]);
+        assert!(selected.is_empty());
+    }
+}

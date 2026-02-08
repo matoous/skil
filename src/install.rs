@@ -178,3 +178,31 @@ pub fn sanitize_name(name: &str) -> String {
         trimmed.chars().take(255).collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_name;
+
+    #[test]
+    fn sanitizes_names() {
+        assert_eq!(sanitize_name("Hello World"), "hello-world");
+        assert_eq!(sanitize_name("../evil"), "evil");
+        assert_eq!(sanitize_name("Already_Good"), "already_good");
+    }
+
+    #[test]
+    fn sanitize_name_handles_edge_cases() {
+        assert_eq!(sanitize_name("..."), "unnamed-skill");
+        assert_eq!(sanitize_name("a---b___c"), "a-b___c");
+        assert_eq!(sanitize_name("..Hello.."), "hello");
+        assert_eq!(sanitize_name("x y z"), "x-y-z");
+    }
+
+    #[test]
+    fn sanitize_name_truncates_to_255_chars() {
+        let input = "a".repeat(300);
+        let output = sanitize_name(&input);
+        assert_eq!(output.len(), 255);
+        assert!(output.chars().all(|c| c == 'a'));
+    }
+}

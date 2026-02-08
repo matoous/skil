@@ -182,3 +182,156 @@ pub fn parse_frontmatter(content: &str) -> Result<Option<Frontmatter>> {
     let data: Frontmatter = serde_yaml::from_str(&yaml)?;
     Ok(Some(data))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn parses_frontmatter() {
+        let content = "---\nname: Test Skill\ndescription: Does stuff\n---\n\n# Test";
+        let frontmatter = parse_frontmatter(content).expect("ok").expect("some");
+        assert_eq!(frontmatter.name.expect("name"), "Test Skill");
+        assert_eq!(frontmatter.description.expect("description"), "Does stuff");
+    }
+
+    #[test]
+    fn ignores_missing_frontmatter() {
+        let content = "# No frontmatter";
+        let frontmatter = parse_frontmatter(content).expect("ok");
+        assert!(frontmatter.is_none());
+    }
+
+    #[test]
+    fn rejects_invalid_frontmatter_yaml() {
+        let content = "---\nname: [\n---\n# Broken";
+        let err = parse_frontmatter(content).expect_err("invalid yaml should fail");
+        assert!(!err.to_string().is_empty());
+    }
+
+    #[test]
+    fn selects_skills_case_insensitively() {
+        let skills = vec![
+            Skill {
+                name: "Web-Design".to_string(),
+                description: "One".to_string(),
+                path: Path::new("one").to_path_buf(),
+                raw_content: String::new(),
+            },
+            Skill {
+                name: "go-style".to_string(),
+                description: "Two".to_string(),
+                path: Path::new("two").to_path_buf(),
+                raw_content: String::new(),
+            },
+        ];
+
+        let selected = select_skills(&skills, &[String::from("WEB-DESIGN")]);
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].name, "Web-Design");
+    }
+
+    #[test]
+    fn discovers_skills_in_priority_locations() {
+        let dir = tempdir().expect("tempdir");
+        let skill_dir = dir.path().join("skills").join("my-skill");
+        std::fs::create_dir_all(&skill_dir).expect("create skill dir");
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: MySkill\ndescription: Desc\n---\n# Title",
+        )
+        .expect("write skill");
+
+        let discovered = discover_skills(dir.path(), None, true).expect("discover");
+        assert_eq!(discovered.len(), 1);
+        assert_eq!(discovered[0].name, "MySkill");
+        assert_eq!(discovered[0].description, "Desc");
+    }
+
+    #[test]
+    fn select_skills_wildcard_returns_all() {
+        let skills = vec![
+            Skill {
+                name: "a".to_string(),
+                description: "A".to_string(),
+                path: Path::new("a").to_path_buf(),
+                raw_content: String::new(),
+            },
+            Skill {
+                name: "b".to_string(),
+                description: "B".to_string(),
+                path: Path::new("b").to_path_buf(),
+                raw_content: String::new(),
+            },
+        ];
+
+        let selected = select_skills(&skills, &[String::from("*")]);
+        assert_eq!(selected.len(), 2);
+    }
+
+    #[test]
+    fn parse_skill_md_requires_name_and_description() {
+        let dir = tempdir().expect("tempdir");
+        let missing_name = dir.path().join("missing-name.md");
+        std::fs::write(
+            &missing_name,
+            "---\ndescription: Desc only\n---\n# Missing name",
+        )
+        .expect("write");
+        assert!(parse_skill_md(&missing_name).expect("parsed").is_none());
+
+        let missing_description = dir.path().join("missing-description.md");
+        std::fs::write(
+            &missing_description,
+            "---\nname: Name only\n---\n# Missing description",
+        )
+        .expect("write");
+        assert!(
+            parse_skill_md(&missing_description)
+                .expect("parsed")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn discover_skills_deduplicates_by_name() {
+        let dir = tempdir().expect("tempdir");
+        let root_skill = dir.path().join("root-skill");
+        let nested_skill = dir.path().join("skills").join("nested-skill");
+        std::fs::create_dir_all(&root_skill).expect("create root");
+        std::fs::create_dir_all(&nested_skill).expect("create nested");
+
+        let content = "---\nname: SameName\ndescription: Desc\n---\n# Title";
+        std::fs::write(root_skill.join("SKILL.md"), content).expect("write root");
+        std::fs::write(nested_skill.join("SKILL.md"), content).expect("write nested");
+
+        let discovered = discover_skills(dir.path(), None, true).expect("discover");
+        assert_eq!(discovered.len(), 1);
+        assert_eq!(discovered[0].name, "SameName");
+    }
+
+    #[test]
+    fn discover_skills_stops_early_when_root_has_skill_and_full_depth_is_false() {
+        let dir = tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join("SKILL.md"),
+            "---\nname: RootSkill\ndescription: Root\n---\n# Root",
+        )
+        .expect("write root skill");
+
+        let nested_skill = dir.path().join("skills").join("nested-skill");
+        std::fs::create_dir_all(&nested_skill).expect("create nested");
+        std::fs::write(
+            nested_skill.join("SKILL.md"),
+            "---\nname: NestedSkill\ndescription: Nested\n---\n# Nested",
+        )
+        .expect("write nested skill");
+
+        let discovered = discover_skills(dir.path(), None, false).expect("discover");
+        assert_eq!(discovered.len(), 1);
+        assert_eq!(discovered[0].name, "RootSkill");
+    }
+}

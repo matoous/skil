@@ -327,3 +327,170 @@ fn parse_codeberg_tree_url(source: &str) -> Option<ParsedGithubTreeUrl> {
 
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn parses_github_tree_url() {
+        let url = "https://github.com/vercel-labs/agent-skills/tree/main/skills/web-design";
+        let (repo_url, subpath, owner_repo, branch) = parse_github_tree_url(url).expect("parsed");
+        assert_eq!(repo_url, "https://github.com/vercel-labs/agent-skills.git");
+        assert_eq!(
+            subpath.expect("subpath").to_string_lossy(),
+            "skills/web-design"
+        );
+        assert_eq!(owner_repo.expect("owner/repo"), "vercel-labs/agent-skills");
+        assert_eq!(branch.expect("branch"), "main");
+    }
+
+    #[test]
+    fn parses_git_ssh_url() {
+        let url = "git@github.com:vercel-labs/agent-skills.git";
+        let (repo_url, subpath, owner_repo, branch) = parse_github_tree_url(url).expect("parsed");
+        assert_eq!(repo_url, url);
+        assert!(subpath.is_none());
+        assert_eq!(owner_repo.expect("owner/repo"), "vercel-labs/agent-skills");
+        assert!(branch.is_none());
+    }
+
+    #[test]
+    fn parses_gitlab_tree_url() {
+        let url = "https://gitlab.com/example/skills/-/tree/main/skills/web-design";
+        let (repo_url, subpath, owner_repo, branch, source_type) =
+            parse_hosted_git_url(url).expect("parsed");
+        assert_eq!(repo_url, "https://gitlab.com/example/skills.git");
+        assert_eq!(
+            subpath.expect("subpath").to_string_lossy(),
+            "skills/web-design"
+        );
+        assert_eq!(owner_repo.expect("owner/repo"), "example/skills");
+        assert_eq!(branch.expect("branch"), "main");
+        assert_eq!(source_type, "gitlab");
+    }
+
+    #[test]
+    fn parses_codeberg_tree_url() {
+        let url = "https://codeberg.org/example/skills/src/branch/main/skills/web-design";
+        let (repo_url, subpath, owner_repo, branch, source_type) =
+            parse_hosted_git_url(url).expect("parsed");
+        assert_eq!(repo_url, "https://codeberg.org/example/skills.git");
+        assert_eq!(
+            subpath.expect("subpath").to_string_lossy(),
+            "skills/web-design"
+        );
+        assert_eq!(owner_repo.expect("owner/repo"), "example/skills");
+        assert_eq!(branch.expect("branch"), "main");
+        assert_eq!(source_type, "codeberg");
+    }
+
+    #[test]
+    fn parses_owner_repo_source_with_subpath() {
+        let parsed = parse_source("vercel-labs/agent-skills/skills/web-design").expect("parsed");
+        let Source::Git { url, subpath, info } = parsed else {
+            panic!("expected git source");
+        };
+
+        assert_eq!(url, "https://github.com/vercel-labs/agent-skills.git");
+        assert_eq!(
+            subpath.expect("subpath"),
+            PathBuf::from("skills/web-design")
+        );
+        assert_eq!(
+            info.github_owner_repo.expect("owner/repo"),
+            "vercel-labs/agent-skills"
+        );
+        assert_eq!(info.source_type, "github");
+    }
+
+    #[test]
+    fn parses_existing_local_source_path() {
+        let dir = tempdir().expect("tempdir");
+        let parsed = parse_source(dir.path().to_str().expect("utf8 path")).expect("parsed");
+
+        let Source::Local { path } = parsed else {
+            panic!("expected local source");
+        };
+        assert_eq!(
+            path,
+            std::fs::canonicalize(dir.path()).expect("canonical path")
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_short_source() {
+        let err = parse_source("invalid").expect_err("invalid source should fail");
+        assert!(err.to_string().contains("Invalid source"));
+    }
+
+    #[test]
+    fn parses_unknown_url_as_generic_git_source() {
+        let parsed = parse_source("https://example.com/custom/repo.git").expect("parsed");
+        let Source::Git { url, subpath, info } = parsed else {
+            panic!("expected git source");
+        };
+
+        assert_eq!(url, "https://example.com/custom/repo.git");
+        assert!(subpath.is_none());
+        assert_eq!(info.source_type, "git");
+        assert_eq!(info.source_id, "https://example.com/custom/repo.git");
+    }
+
+    #[test]
+    fn parses_github_blob_url_with_trailing_slash() {
+        let url = "https://github.com/vercel-labs/agent-skills/blob/main/skills/web-design/";
+        let (repo_url, subpath, owner_repo, branch) = parse_github_tree_url(url).expect("parsed");
+        assert_eq!(repo_url, "https://github.com/vercel-labs/agent-skills.git");
+        assert_eq!(
+            subpath.expect("subpath").to_string_lossy(),
+            "skills/web-design"
+        );
+        assert_eq!(owner_repo.expect("owner/repo"), "vercel-labs/agent-skills");
+        assert_eq!(branch.expect("branch"), "main");
+    }
+
+    #[test]
+    fn parses_plain_github_repo_url_without_branch_or_subpath() {
+        let url = "https://github.com/vercel-labs/agent-skills";
+        let (repo_url, subpath, owner_repo, branch) = parse_github_tree_url(url).expect("parsed");
+        assert_eq!(repo_url, "https://github.com/vercel-labs/agent-skills.git");
+        assert!(subpath.is_none());
+        assert_eq!(owner_repo.expect("owner/repo"), "vercel-labs/agent-skills");
+        assert!(branch.is_none());
+    }
+
+    #[test]
+    fn parses_gitlab_and_codeberg_ssh_urls() {
+        let gitlab = "git@gitlab.com:example/repo.git";
+        let (repo_url, subpath, owner_repo, branch, source_type) =
+            parse_hosted_git_url(gitlab).expect("gitlab parsed");
+        assert_eq!(repo_url, gitlab);
+        assert!(subpath.is_none());
+        assert_eq!(owner_repo.expect("owner/repo"), "example/repo");
+        assert!(branch.is_none());
+        assert_eq!(source_type, "gitlab");
+
+        let codeberg = "git@codeberg.org:example/repo.git";
+        let (repo_url, subpath, owner_repo, branch, source_type) =
+            parse_hosted_git_url(codeberg).expect("codeberg parsed");
+        assert_eq!(repo_url, codeberg);
+        assert!(subpath.is_none());
+        assert_eq!(owner_repo.expect("owner/repo"), "example/repo");
+        assert!(branch.is_none());
+        assert_eq!(source_type, "codeberg");
+    }
+
+    #[test]
+    fn hosted_git_url_returns_none_for_non_supported_hosts() {
+        assert!(parse_hosted_git_url("https://example.com/org/repo.git").is_none());
+    }
+
+    #[test]
+    fn parse_source_rejects_missing_explicit_local_path() {
+        let missing_path = "./__skil_missing_path_for_test__";
+        let err = parse_source(missing_path).expect_err("missing explicit local path should fail");
+        assert!(err.to_string().contains("Local path does not exist"));
+    }
+}
