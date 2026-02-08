@@ -2,13 +2,11 @@ use std::path::PathBuf;
 
 use crate::error::{Result, SkilError};
 
-/// Source metadata used for lock file and updates.
+/// Source metadata used for installs and updates.
 #[derive(Debug, Clone)]
 pub struct SourceInfo {
     pub source_id: String,
-    pub source_type: String,
     pub source_url: String,
-    pub skill_path: Option<String>,
     pub github_owner_repo: Option<String>,
     pub github_branch: Option<String>,
 }
@@ -103,9 +101,7 @@ fn parse_owner_repo(source: &str) -> Result<Source> {
         subpath,
         info: SourceInfo {
             source_id,
-            source_type: "github".to_string(),
             source_url: url,
-            skill_path: None,
             github_owner_repo: Some(format!("{}/{}", owner, repo)),
             github_branch: None,
         },
@@ -114,15 +110,13 @@ fn parse_owner_repo(source: &str) -> Result<Source> {
 
 /// Parses supported hosted git URLs into a source.
 fn parse_git_url(source: &str) -> Result<Source> {
-    if let Some((url, subpath, owner_repo, branch, source_type)) = parse_hosted_git_url(source) {
+    if let Some((url, subpath, owner_repo, branch)) = parse_hosted_git_url(source) {
         return Ok(Source::Git {
             url: url.clone(),
             subpath,
             info: SourceInfo {
                 source_id: owner_repo.clone().unwrap_or_else(|| url.clone()),
-                source_type,
                 source_url: url,
-                skill_path: None,
                 github_owner_repo: owner_repo,
                 github_branch: branch,
             },
@@ -134,9 +128,7 @@ fn parse_git_url(source: &str) -> Result<Source> {
         subpath: None,
         info: SourceInfo {
             source_id: source.to_string(),
-            source_type: "git".to_string(),
             source_url: source.to_string(),
-            skill_path: None,
             github_owner_repo: parse_github_owner_repo(source),
             github_branch: None,
         },
@@ -204,27 +196,21 @@ fn parse_github_owner_repo(source: &str) -> Option<String> {
     None
 }
 
-/// Parsed hosted git tuple: repo URL, subpath, owner/repo, branch, source type.
-type ParsedHostedGitUrl = (
-    String,
-    Option<PathBuf>,
-    Option<String>,
-    Option<String>,
-    String,
-);
+/// Parsed hosted git tuple: repo URL, subpath, owner/repo, branch.
+type ParsedHostedGitUrl = (String, Option<PathBuf>, Option<String>, Option<String>);
 
 /// Parses supported hosted git providers (GitHub, GitLab, Codeberg).
 pub fn parse_hosted_git_url(source: &str) -> Option<ParsedHostedGitUrl> {
     if let Some((url, subpath, owner_repo, branch)) = parse_github_tree_url(source) {
-        return Some((url, subpath, owner_repo, branch, "github".to_string()));
+        return Some((url, subpath, owner_repo, branch));
     }
 
     if let Some((url, subpath, owner_repo, branch)) = parse_gitlab_tree_url(source) {
-        return Some((url, subpath, owner_repo, branch, "gitlab".to_string()));
+        return Some((url, subpath, owner_repo, branch));
     }
 
     if let Some((url, subpath, owner_repo, branch)) = parse_codeberg_tree_url(source) {
-        return Some((url, subpath, owner_repo, branch, "codeberg".to_string()));
+        return Some((url, subpath, owner_repo, branch));
     }
 
     None
@@ -359,8 +345,7 @@ mod tests {
     #[test]
     fn parses_gitlab_tree_url() {
         let url = "https://gitlab.com/example/skills/-/tree/main/skills/web-design";
-        let (repo_url, subpath, owner_repo, branch, source_type) =
-            parse_hosted_git_url(url).expect("parsed");
+        let (repo_url, subpath, owner_repo, branch) = parse_hosted_git_url(url).expect("parsed");
         assert_eq!(repo_url, "https://gitlab.com/example/skills.git");
         assert_eq!(
             subpath.expect("subpath").to_string_lossy(),
@@ -368,14 +353,12 @@ mod tests {
         );
         assert_eq!(owner_repo.expect("owner/repo"), "example/skills");
         assert_eq!(branch.expect("branch"), "main");
-        assert_eq!(source_type, "gitlab");
     }
 
     #[test]
     fn parses_codeberg_tree_url() {
         let url = "https://codeberg.org/example/skills/src/branch/main/skills/web-design";
-        let (repo_url, subpath, owner_repo, branch, source_type) =
-            parse_hosted_git_url(url).expect("parsed");
+        let (repo_url, subpath, owner_repo, branch) = parse_hosted_git_url(url).expect("parsed");
         assert_eq!(repo_url, "https://codeberg.org/example/skills.git");
         assert_eq!(
             subpath.expect("subpath").to_string_lossy(),
@@ -383,7 +366,6 @@ mod tests {
         );
         assert_eq!(owner_repo.expect("owner/repo"), "example/skills");
         assert_eq!(branch.expect("branch"), "main");
-        assert_eq!(source_type, "codeberg");
     }
 
     #[test]
@@ -402,7 +384,6 @@ mod tests {
             info.github_owner_repo.expect("owner/repo"),
             "vercel-labs/agent-skills"
         );
-        assert_eq!(info.source_type, "github");
     }
 
     #[test]
@@ -434,7 +415,6 @@ mod tests {
 
         assert_eq!(url, "https://example.com/custom/repo.git");
         assert!(subpath.is_none());
-        assert_eq!(info.source_type, "git");
         assert_eq!(info.source_id, "https://example.com/custom/repo.git");
     }
 
@@ -464,22 +444,20 @@ mod tests {
     #[test]
     fn parses_gitlab_and_codeberg_ssh_urls() {
         let gitlab = "git@gitlab.com:example/repo.git";
-        let (repo_url, subpath, owner_repo, branch, source_type) =
+        let (repo_url, subpath, owner_repo, branch) =
             parse_hosted_git_url(gitlab).expect("gitlab parsed");
         assert_eq!(repo_url, gitlab);
         assert!(subpath.is_none());
         assert_eq!(owner_repo.expect("owner/repo"), "example/repo");
         assert!(branch.is_none());
-        assert_eq!(source_type, "gitlab");
 
         let codeberg = "git@codeberg.org:example/repo.git";
-        let (repo_url, subpath, owner_repo, branch, source_type) =
+        let (repo_url, subpath, owner_repo, branch) =
             parse_hosted_git_url(codeberg).expect("codeberg parsed");
         assert_eq!(repo_url, codeberg);
         assert!(subpath.is_none());
         assert_eq!(owner_repo.expect("owner/repo"), "example/repo");
         assert!(branch.is_none());
-        assert_eq!(source_type, "codeberg");
     }
 
     #[test]

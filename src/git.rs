@@ -13,6 +13,22 @@ pub fn clone_repo(url: &str, dest: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Checks out a specific revision in a cloned repository.
+pub fn checkout_revision(repo_path: &Path, revision: &str) -> Result<()> {
+    let output = Command::new("git")
+        .args(["-C"])
+        .arg(repo_path)
+        .args(["checkout", "--detach", revision])
+        .output()?;
+    if !output.status.success() {
+        return Err(crate::error::SkilError::Message(format!(
+            "git checkout failed for revision {}",
+            revision
+        )));
+    }
+    Ok(())
+}
+
 /// Returns the HEAD revision for a cloned repository.
 pub fn head_revision(repo_path: &Path) -> Result<String> {
     let repo = gix::open(repo_path).map_err(|err| SkilError::Message(err.to_string()))?;

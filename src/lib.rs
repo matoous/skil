@@ -7,7 +7,6 @@ mod config;
 mod error;
 mod git;
 pub mod install;
-mod lock;
 pub mod skill;
 pub mod source;
 pub mod ui;
@@ -21,6 +20,7 @@ pub fn run() -> Result<()> {
 
     match cli.command {
         cli::Command::Add(args) => cli::run_add(args),
+        cli::Command::Install(args) => cli::run_install(args),
         cli::Command::Remove(args) => cli::run_remove(args),
         cli::Command::List(args) => cli::run_list(args),
         cli::Command::Find(args) => cli::run_find(args),

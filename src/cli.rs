@@ -11,11 +11,10 @@ use crate::config::{
     SkilSource, config_location, config_location_auto, read_config, update_config,
 };
 use crate::error::{Result, SkilError};
-use crate::git::{clone_repo, head_revision, remote_revision};
+use crate::git::{checkout_revision, clone_repo, head_revision, remote_revision};
 use crate::install::{
     InstallMode, agent_skills_base, canonical_skills_dir, install_skill, sanitize_name,
 };
-use crate::lock::{remove_lock_entry, update_lock_for_skill};
 use crate::skill::{discover_skills, parse_skill_md, select_skills};
 use crate::source::{Source, parse_source};
 use crate::ui;
@@ -36,8 +35,10 @@ pub struct Cli {
 /// Top-level CLI commands.
 #[derive(Subcommand)]
 pub enum Command {
-    #[command(aliases = ["a", "install", "i"], about = "Install skills from a source")]
+    #[command(aliases = ["a", "i"], about = "Install skills from a source")]
     Add(AddArgs),
+    #[command(about = "Install skills from .skil.toml at pinned revisions")]
+    Install(InstallArgs),
     #[command(aliases = ["rm", "r"], about = "Remove installed skills")]
     Remove(RemoveArgs),
     #[command(aliases = ["ls"], about = "List installed skills")]
@@ -73,6 +74,22 @@ pub struct AddArgs {
     pub yes: bool,
     #[arg(long = "all")]
     pub all: bool,
+    #[arg(long = "full-depth")]
+    pub full_depth: bool,
+}
+
+/// Arguments for `skills install`.
+#[derive(Args, Clone)]
+#[command(about = "Install skills tracked in config")]
+pub struct InstallArgs {
+    #[arg(short = 'g', long = "global")]
+    pub global: bool,
+    #[arg(long = "copy")]
+    pub copy: bool,
+    #[arg(short = 'a', long = "agent", num_args = 1..)]
+    pub agent: Vec<String>,
+    #[arg(short = 'y', long = "yes")]
+    pub yes: bool,
     #[arg(long = "full-depth")]
     pub full_depth: bool,
 }
@@ -145,6 +162,10 @@ struct UpdateEntry {
     source_key: String,
     source: SkilSource,
     latest_revision: String,
+}
+
+fn is_remote_source_key(source_key: &str) -> bool {
+    source_key.contains("://") || source_key.starts_with("git@")
 }
 
 fn prompt_for_skills(skills: &[crate::skill::Skill]) -> Result<Vec<String>> {
@@ -272,27 +293,17 @@ pub fn run_completions(args: CompletionsArgs) -> Result<()> {
     Ok(())
 }
 
-/// Installs skills from a local path or git source.
-pub fn run_add(mut args: AddArgs) -> Result<()> {
-    if args.all {
-        args.skill = vec!["*".to_string()];
-        args.agent = vec!["*".to_string()];
-        args.yes = true;
+fn resolve_install_agents(
+    agent_args: &[String],
+    yes: bool,
+) -> Result<Vec<crate::agent::AgentConfig>> {
+    let mut selected = agent_args.to_vec();
+    if selected.is_empty() && !yes {
+        selected = prompt_for_agents()?;
     }
-
-    let source = parse_source(&args.source)?;
-
-    let should_prompt_agents = !args.list;
-    if should_prompt_agents && args.agent.is_empty() && !args.yes {
-        args.agent = prompt_for_agents()?;
-    }
-
-    if should_prompt_agents
-        && !(args.agent.is_empty() || (args.agent.len() == 1 && args.agent[0] == "*"))
-    {
+    if !(selected.is_empty() || (selected.len() == 1 && selected[0] == "*")) {
         let valid: HashSet<&str> = agent_configs().iter().map(|a| a.name).collect();
-        let invalid: Vec<String> = args
-            .agent
+        let invalid: Vec<String> = selected
             .iter()
             .filter(|name| !valid.contains(name.as_str()))
             .cloned()
@@ -311,12 +322,26 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
         }
     }
 
+    let agents = resolve_agents(&selected);
+    if agents.is_empty() {
+        return Err(SkilError::Message("No agents selected".to_string()));
+    }
+    Ok(agents)
+}
+
+/// Installs skills from a local path or git source.
+pub fn run_add(mut args: AddArgs) -> Result<()> {
+    if args.all {
+        args.skill = vec!["*".to_string()];
+        args.agent = vec!["*".to_string()];
+        args.yes = true;
+    }
+
+    let source = parse_source(&args.source)?;
+
+    let should_prompt_agents = !args.list;
     let agents = if should_prompt_agents {
-        let agents = resolve_agents(&args.agent);
-        if agents.is_empty() {
-            return Err(SkilError::Message("No agents selected".to_string()));
-        }
-        agents
+        resolve_install_agents(&args.agent, args.yes)?
     } else {
         Vec::new()
     };
@@ -369,9 +394,9 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
         }
     };
 
-    let (subpath, source_info) = match &source {
-        Source::Local { .. } => (None, None),
-        Source::Git { subpath, info, .. } => (subpath.clone(), Some(info.clone())),
+    let subpath = match &source {
+        Source::Local { .. } => None,
+        Source::Git { subpath, .. } => subpath.clone(),
     };
 
     let revision = match &source {
@@ -409,10 +434,6 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
         for agent in &agents {
             install_skill(skill, agent, install_global, install_mode)?;
         }
-
-        if let Some(info) = source_info.clone() {
-            update_lock_for_skill(skill, &info, &base_path)?;
-        }
     }
     install_spinner.finish_with_message("Installation complete");
 
@@ -423,14 +444,12 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
     };
     let source_entry = match &source {
         Source::Local { .. } => SkilSource {
-            source_type: "local".to_string(),
             branch: None,
             subpath: None,
             revision: None,
             skills: vec![],
         },
         Source::Git { subpath, info, .. } => SkilSource {
-            source_type: info.source_type.clone(),
             branch: info.github_branch.clone(),
             subpath: subpath.as_ref().map(|p| p.to_string_lossy().to_string()),
             revision: None,
@@ -449,6 +468,87 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
     ui::success(&format!(
         "Installed {} skill(s) to {} agent(s)",
         selected_skills.len(),
+        agents.len()
+    ));
+    Ok(())
+}
+
+/// Installs all tracked skills from config, respecting pinned revisions.
+pub fn run_install(mut args: InstallArgs) -> Result<()> {
+    let location = config_location(args.global)?;
+    let config = read_config(&location.path)?;
+    if config.sources.is_empty() {
+        ui::info(&format!(
+            "No sources found in {}",
+            display_path(&location.path)
+        ));
+        return Ok(());
+    }
+
+    if args.agent.is_empty() && !args.yes {
+        args.agent = prompt_for_agents()?;
+    }
+    let agents = resolve_install_agents(&args.agent, true)?;
+
+    let install_mode = if args.copy {
+        InstallMode::Copy
+    } else {
+        InstallMode::Symlink
+    };
+
+    let mut installed = 0usize;
+    for (source_key, source_entry) in &config.sources {
+        if source_entry.skills.is_empty() {
+            continue;
+        }
+        let source = parse_source(source_key)?;
+
+        let (base_path, _temp): (PathBuf, Option<tempfile::TempDir>) = match &source {
+            Source::Local { path } => (path.clone(), None),
+            Source::Git { url, .. } => {
+                let temp_dir = tempfile::tempdir()?;
+                let spinner = ui::spinner(&format!("Cloning {}...", source_key));
+                let result = clone_repo(url, temp_dir.path());
+                match result {
+                    Ok(()) => spinner.finish_with_message("Repository cloned"),
+                    Err(err) => {
+                        spinner.finish_with_message("Repository clone failed");
+                        return Err(err);
+                    }
+                }
+                if let Some(revision) = source_entry.revision.as_deref() {
+                    checkout_revision(temp_dir.path(), revision)?;
+                }
+                (temp_dir.path().to_path_buf(), Some(temp_dir))
+            }
+        };
+
+        let parsed_subpath = match &source {
+            Source::Git { subpath, .. } => subpath.clone(),
+            Source::Local { .. } => None,
+        };
+        let subpath = source_entry
+            .subpath
+            .as_deref()
+            .map(PathBuf::from)
+            .or(parsed_subpath);
+        let skills = discover_skills(&base_path, subpath.as_deref(), args.full_depth)?;
+        if skills.is_empty() {
+            continue;
+        }
+
+        let selected_skills = select_skills(&skills, &source_entry.skills);
+        for skill in &selected_skills {
+            for agent in &agents {
+                install_skill(skill, agent, args.global, install_mode)?;
+            }
+        }
+        installed += selected_skills.len();
+    }
+
+    ui::success(&format!(
+        "Installed {} skill(s) to {} agent(s)",
+        installed,
         agents.len()
     ));
     Ok(())
@@ -544,7 +644,6 @@ pub fn run_remove(mut args: RemoveArgs) -> Result<()> {
             if target.exists() {
                 std::fs::remove_dir_all(&target)?;
                 removed += 1;
-                remove_lock_entry(name).ok();
             }
         }
     }
@@ -556,6 +655,28 @@ pub fn run_remove(mut args: RemoveArgs) -> Result<()> {
 /// Lists installed skills for agents or the canonical store.
 pub fn run_list(args: ListArgs) -> Result<()> {
     if args.agent.is_empty() {
+        if !args.global {
+            let local_config = config_location(false)?;
+            if local_config.path.exists() {
+                let config = read_config(&local_config.path)?;
+                let mut names: Vec<String> = config
+                    .sources
+                    .values()
+                    .flat_map(|source| source.skills.iter().cloned())
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .into_iter()
+                    .collect();
+                if !names.is_empty() {
+                    ui::heading("Skills");
+                    names.sort();
+                    for name in names {
+                        ui::list_item(&name);
+                    }
+                    return Ok(());
+                }
+            }
+        }
+
         let canonical = canonical_skills_dir(args.global)?;
         if canonical.exists() {
             let mut names = Vec::new();
@@ -701,7 +822,7 @@ pub fn run_check() -> Result<()> {
 
     let mut updates = Vec::new();
     for (source_key, source) in &config.sources {
-        if source.source_type == "local" {
+        if !is_remote_source_key(source_key) {
             continue;
         }
         let latest = remote_revision(source_key, source.branch.as_deref())?;
@@ -743,7 +864,7 @@ pub fn run_update() -> Result<()> {
 
     let mut updates = Vec::new();
     for (source_key, source) in &config.sources {
-        if source.source_type == "local" {
+        if !is_remote_source_key(source_key) {
             continue;
         }
         let latest = remote_revision(source_key, source.branch.as_deref())?;

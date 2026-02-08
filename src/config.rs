@@ -11,15 +11,13 @@ const LOCAL_CONFIG_FILE: &str = ".skil.toml";
 /// Persistent configuration for installed sources and skills.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct SkilConfig {
-    #[serde(rename = "source")]
+    #[serde(rename = "source", default)]
     pub sources: BTreeMap<String, SkilSource>,
 }
 
 /// A source entry tracked in config.toml.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SkilSource {
-    #[serde(rename = "source-type")]
-    pub source_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub branch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -129,7 +127,6 @@ mod tests {
         config.sources.insert(
             "repo".to_string(),
             SkilSource {
-                source_type: "github".to_string(),
                 branch: Some("main".to_string()),
                 subpath: Some("skills".to_string()),
                 revision: Some("abc123".to_string()),
@@ -141,7 +138,6 @@ mod tests {
         let loaded = read_config(&path).expect("read");
 
         let source = loaded.sources.get("repo").expect("repo source");
-        assert_eq!(source.source_type, "github");
         assert_eq!(source.branch.as_deref(), Some("main"));
         assert_eq!(source.subpath.as_deref(), Some("skills"));
         assert_eq!(source.revision.as_deref(), Some("abc123"));
@@ -154,7 +150,6 @@ mod tests {
         let path = dir.path().join("config.toml");
         let source_key = "https://github.com/example/repo.git";
         let source = SkilSource {
-            source_type: "github".to_string(),
             branch: Some("main".to_string()),
             subpath: None,
             revision: Some("rev-1".to_string()),
