@@ -152,6 +152,18 @@ cargo build
 cargo run -- --help
 ```
 
+## Releases
+
+Releases are automated with `release-plz` via `.github/workflows/release-plz.yaml`.
+
+The workflow:
+- Opens/updates a release PR when commits land on `main`.
+- Publishes to crates.io and creates a GitHub release after the release PR is merged.
+
+Repository setup:
+- Add `CARGO_REGISTRY_TOKEN` in repository secrets (crates.io API token).
+- Keep GitHub Actions workflow permissions enabled for `contents: write` and `pull-requests: write`.
+
 ## Notes
 
 - Interactive selection for skills/agents is supported when you omit `--skill` or `--agent`.
