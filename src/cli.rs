@@ -8,10 +8,10 @@ use dialoguer::theme::ColorfulTheme;
 
 use crate::agent::{agent_configs, resolve_agents};
 use crate::config::{
-    SkilSource, config_location, config_location_auto, read_config, update_config,
+    SkilConfig, SkilSource, config_location, config_location_auto, read_config, update_config,
 };
 use crate::error::{Result, SkilError};
-use crate::git::{checkout_revision, clone_repo, head_revision, remote_revision};
+use crate::git::{checkout_revision, clone_repo, head_revision, latest_tag, remote_revision};
 use crate::install::{
     InstallMode, agent_skills_base, canonical_skills_dir, install_skill, sanitize_name,
 };
@@ -37,7 +37,7 @@ pub struct Cli {
 pub enum Command {
     #[command(aliases = ["a", "i"], about = "Install skills from a source")]
     Add(AddArgs),
-    #[command(about = "Install skills from .skil.toml at pinned revisions")]
+    #[command(about = "Install skills from .skil.toml at pinned checksums or versions")]
     Install(InstallArgs),
     #[command(aliases = ["rm", "r"], about = "Remove installed skills")]
     Remove(RemoveArgs),
@@ -145,11 +145,13 @@ pub struct CompletionsArgs {
 
 const SEARCH_API_BASE: &str = "https://skills.sh";
 
+/// Response payload returned by the registry search endpoint.
 #[derive(Debug, serde::Deserialize)]
 struct SearchApiResponse {
     skills: Vec<SearchApiSkill>,
 }
 
+/// One search result item returned by the registry API.
 #[derive(Debug, serde::Deserialize)]
 struct SearchApiSkill {
     name: String,
@@ -157,17 +159,58 @@ struct SearchApiSkill {
     source: Option<String>,
 }
 
+/// Represents one source with an available newer checksum or version.
 #[derive(Debug)]
 struct UpdateEntry {
     source_key: String,
     source: SkilSource,
-    latest_revision: String,
+    latest_checksum: Option<String>,
+    latest_version: Option<String>,
 }
 
+/// Returns true when a source key looks like a remote git reference.
 fn is_remote_source_key(source_key: &str) -> bool {
     source_key.contains("://") || source_key.starts_with("git@")
 }
 
+/// Collects all updatable sources from config.
+/// For tagged repositories, compares by latest tag name.
+/// For non-tagged repositories, compares by latest remote revision checksum.
+fn collect_available_updates(config: &SkilConfig) -> Result<Vec<UpdateEntry>> {
+    let mut updates = Vec::new();
+    for (source_key, source) in &config.sources {
+        if !is_remote_source_key(source_key) {
+            continue;
+        }
+
+        if let Some(tag) = latest_tag(source_key)? {
+            let current = source.version.clone().unwrap_or_default();
+            if current != tag {
+                updates.push(UpdateEntry {
+                    source_key: source_key.clone(),
+                    source: source.clone(),
+                    latest_checksum: None,
+                    latest_version: Some(tag),
+                });
+            }
+            continue;
+        }
+
+        let latest = remote_revision(source_key, source.branch.as_deref())?;
+        let current = source.checksum.clone().unwrap_or_default();
+        if current.is_empty() || current != latest {
+            updates.push(UpdateEntry {
+                source_key: source_key.clone(),
+                source: source.clone(),
+                latest_checksum: Some(latest),
+                latest_version: None,
+            });
+        }
+    }
+    Ok(updates)
+}
+
+/// Presents an interactive skill picker and returns selected skill names.
 fn prompt_for_skills(skills: &[crate::skill::Skill]) -> Result<Vec<String>> {
     let max_width = console::Term::stdout().size().1 as usize;
     let items: Vec<String> = skills
@@ -191,6 +234,7 @@ fn prompt_for_skills(skills: &[crate::skill::Skill]) -> Result<Vec<String>> {
     Ok(selected)
 }
 
+/// Formats one skill item line for interactive selection.
 fn format_skill_line(name: &str, description: &str, max_width: usize) -> String {
     let sep = " — ";
     if max_width == 0 {
@@ -223,6 +267,7 @@ fn format_skill_line(name: &str, description: &str, max_width: usize) -> String 
     )
 }
 
+/// Presents an interactive agent picker and returns selected agent names.
 fn prompt_for_agents() -> Result<Vec<String>> {
     let agents = agent_configs();
     let items: Vec<String> = agents.iter().map(|a| a.display_name.to_string()).collect();
@@ -293,6 +338,7 @@ pub fn run_completions(args: CompletionsArgs) -> Result<()> {
     Ok(())
 }
 
+/// Resolves and validates target agents for install flows.
 fn resolve_install_agents(
     agent_args: &[String],
     yes: bool,
@@ -399,9 +445,15 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
         Source::Git { subpath, .. } => subpath.clone(),
     };
 
-    let revision = match &source {
-        Source::Local { .. } => None,
-        Source::Git { .. } => head_revision(&base_path).ok(),
+    let (checksum, version) = match &source {
+        Source::Local { .. } => (None, None),
+        Source::Git { url, .. } => {
+            let tag = latest_tag(url)?;
+            if let Some(version) = tag.as_deref() {
+                checkout_revision(&base_path, version)?;
+            }
+            (head_revision(&base_path).ok(), tag)
+        }
     };
 
     let skills = discover_skills(&base_path, subpath.as_deref(), args.full_depth)?;
@@ -446,13 +498,15 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
         Source::Local { .. } => SkilSource {
             branch: None,
             subpath: None,
-            revision: None,
+            checksum: None,
+            version: None,
             skills: vec![],
         },
         Source::Git { subpath, info, .. } => SkilSource {
             branch: info.github_branch.clone(),
             subpath: subpath.as_ref().map(|p| p.to_string_lossy().to_string()),
-            revision: None,
+            checksum: None,
+            version: None,
             skills: vec![],
         },
     };
@@ -462,7 +516,8 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
         &source_key,
         source_entry,
         &skill_names,
-        revision,
+        checksum,
+        version,
     )?;
 
     ui::success(&format!(
@@ -473,7 +528,7 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
     Ok(())
 }
 
-/// Installs all tracked skills from config, respecting pinned revisions.
+/// Installs all tracked skills from config, respecting pinned checksums/versions.
 pub fn run_install(mut args: InstallArgs) -> Result<()> {
     let location = config_location(args.global)?;
     let config = read_config(&location.path)?;
@@ -516,8 +571,10 @@ pub fn run_install(mut args: InstallArgs) -> Result<()> {
                         return Err(err);
                     }
                 }
-                if let Some(revision) = source_entry.revision.as_deref() {
-                    checkout_revision(temp_dir.path(), revision)?;
+                if let Some(checksum) = source_entry.checksum.as_deref() {
+                    checkout_revision(temp_dir.path(), checksum)?;
+                } else if let Some(version) = source_entry.version.as_deref() {
+                    checkout_revision(temp_dir.path(), version)?;
                 }
                 (temp_dir.path().to_path_buf(), Some(temp_dir))
             }
@@ -820,21 +877,7 @@ pub fn run_check() -> Result<()> {
         return Ok(());
     }
 
-    let mut updates = Vec::new();
-    for (source_key, source) in &config.sources {
-        if !is_remote_source_key(source_key) {
-            continue;
-        }
-        let latest = remote_revision(source_key, source.branch.as_deref())?;
-        let current = source.revision.clone().unwrap_or_default();
-        if current.is_empty() || current != latest {
-            updates.push(UpdateEntry {
-                source_key: source_key.clone(),
-                source: source.clone(),
-                latest_revision: latest,
-            });
-        }
-    }
+    let updates = collect_available_updates(&config)?;
 
     if updates.is_empty() {
         ui::success("All skills are up to date");
@@ -843,10 +886,12 @@ pub fn run_check() -> Result<()> {
 
     ui::heading(&format!("{} update(s) available", updates.len()));
     for update in updates {
-        ui::list_item(&format!(
-            "{} ({})",
-            update.source_key, update.latest_revision
-        ));
+        let latest = update
+            .latest_version
+            .as_deref()
+            .or(update.latest_checksum.as_deref())
+            .unwrap_or("unknown");
+        ui::list_item(&format!("{} ({})", update.source_key, latest));
     }
 
     Ok(())
@@ -862,21 +907,7 @@ pub fn run_update() -> Result<()> {
         return Ok(());
     }
 
-    let mut updates = Vec::new();
-    for (source_key, source) in &config.sources {
-        if !is_remote_source_key(source_key) {
-            continue;
-        }
-        let latest = remote_revision(source_key, source.branch.as_deref())?;
-        let current = source.revision.clone().unwrap_or_default();
-        if current.is_empty() || current != latest {
-            updates.push(UpdateEntry {
-                source_key: source_key.clone(),
-                source: source.clone(),
-                latest_revision: latest,
-            });
-        }
-    }
+    let updates = collect_available_updates(&config)?;
 
     if updates.is_empty() {
         ui::success("All skills are up to date");
@@ -922,6 +953,7 @@ pub fn run_update() -> Result<()> {
     Ok(())
 }
 
+/// Converts a filesystem path to a display-friendly string.
 fn display_path(path: &Path) -> String {
     path.to_string_lossy().to_string()
 }

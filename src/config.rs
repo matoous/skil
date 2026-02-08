@@ -23,7 +23,9 @@ pub struct SkilSource {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subpath: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub revision: Option<String>,
+    pub checksum: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
     pub skills: Vec<String>,
 }
 
@@ -84,13 +86,14 @@ pub fn write_config(path: &Path, config: &SkilConfig) -> Result<()> {
     Ok(())
 }
 
-/// Updates a config entry with skills and optional revision.
+/// Updates a config entry with skills and optional checksum/version.
 pub fn update_config(
     path: &Path,
     source_key: &str,
     source: SkilSource,
     skills: &[String],
-    revision: Option<String>,
+    checksum: Option<String>,
+    version: Option<String>,
 ) -> Result<()> {
     let mut config = read_config(path)?;
     let entry = config
@@ -100,7 +103,8 @@ pub fn update_config(
     let mut combined: BTreeSet<String> = entry.skills.iter().cloned().collect();
     combined.extend(skills.iter().cloned());
     entry.skills = combined.into_iter().collect();
-    entry.revision = revision.or(entry.revision.clone());
+    entry.checksum = checksum.or(entry.checksum.clone());
+    entry.version = version.or(entry.version.clone());
     write_config(path, &config)?;
     Ok(())
 }
@@ -129,7 +133,8 @@ mod tests {
             SkilSource {
                 branch: Some("main".to_string()),
                 subpath: Some("skills".to_string()),
-                revision: Some("abc123".to_string()),
+                checksum: Some("abc123".to_string()),
+                version: Some("v1.2.3".to_string()),
                 skills: vec!["one".to_string()],
             },
         );
@@ -140,7 +145,8 @@ mod tests {
         let source = loaded.sources.get("repo").expect("repo source");
         assert_eq!(source.branch.as_deref(), Some("main"));
         assert_eq!(source.subpath.as_deref(), Some("skills"));
-        assert_eq!(source.revision.as_deref(), Some("abc123"));
+        assert_eq!(source.checksum.as_deref(), Some("abc123"));
+        assert_eq!(source.version.as_deref(), Some("v1.2.3"));
         assert_eq!(source.skills, vec!["one"]);
     }
 
@@ -152,7 +158,8 @@ mod tests {
         let source = SkilSource {
             branch: Some("main".to_string()),
             subpath: None,
-            revision: Some("rev-1".to_string()),
+            checksum: Some("rev-1".to_string()),
+            version: Some("v1.0.0".to_string()),
             skills: vec!["alpha".to_string()],
         };
 
@@ -162,17 +169,26 @@ mod tests {
             source.clone(),
             &[String::from("beta"), String::from("alpha")],
             Some("rev-2".to_string()),
+            Some("v1.1.0".to_string()),
         )
         .expect("first update");
 
-        update_config(&path, source_key, source, &[String::from("gamma")], None)
-            .expect("second update");
+        update_config(
+            &path,
+            source_key,
+            source,
+            &[String::from("gamma")],
+            None,
+            None,
+        )
+        .expect("second update");
 
         let loaded = read_config(&path).expect("read");
         let entry = loaded.sources.get(source_key).expect("source entry");
 
         assert_eq!(entry.skills, vec!["alpha", "beta", "gamma"]);
-        assert_eq!(entry.revision.as_deref(), Some("rev-2"));
+        assert_eq!(entry.checksum.as_deref(), Some("rev-2"));
+        assert_eq!(entry.version.as_deref(), Some("v1.1.0"));
         assert_eq!(entry.branch.as_deref(), Some("main"));
     }
 

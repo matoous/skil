@@ -29,6 +29,30 @@ pub fn checkout_revision(repo_path: &Path, revision: &str) -> Result<()> {
     Ok(())
 }
 
+/// Returns the latest remote tag name if any tags are available.
+pub fn latest_tag(url: &str) -> Result<Option<String>> {
+    let output = Command::new("git")
+        .args(["ls-remote", "--tags", "--refs", "--sort=-v:refname", url])
+        .output()?;
+    if !output.status.success() {
+        return Err(crate::error::SkilError::Message(
+            "git ls-remote --tags failed".to_string(),
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let Some(first) = stdout.lines().next() else {
+        return Ok(None);
+    };
+    let mut parts = first.split_whitespace();
+    let _hash = parts.next();
+    let reference = parts.next().unwrap_or("");
+    let Some(tag) = reference.strip_prefix("refs/tags/") else {
+        return Ok(None);
+    };
+    Ok(Some(tag.to_string()))
+}
+
 /// Returns the HEAD revision for a cloned repository.
 pub fn head_revision(repo_path: &Path) -> Result<String> {
     let repo = gix::open(repo_path).map_err(|err| SkilError::Message(err.to_string()))?;
