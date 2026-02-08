@@ -2,7 +2,7 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::AtomicBool;
 
-use crate::error::{Result, SkillzError};
+use crate::error::{Result, SkilError};
 
 /// Clones a git repository URL into the destination directory.
 pub fn clone_repo(url: &str, dest: &Path) -> Result<()> {
@@ -15,10 +15,10 @@ pub fn clone_repo(url: &str, dest: &Path) -> Result<()> {
 
 /// Returns the HEAD revision for a cloned repository.
 pub fn head_revision(repo_path: &Path) -> Result<String> {
-    let repo = gix::open(repo_path).map_err(|err| SkillzError::Message(err.to_string()))?;
+    let repo = gix::open(repo_path).map_err(|err| SkilError::Message(err.to_string()))?;
     let head = repo
         .head_id()
-        .map_err(|err| SkillzError::Message(err.to_string()))?;
+        .map_err(|err| SkilError::Message(err.to_string()))?;
     Ok(head.to_string())
 }
 
@@ -29,14 +29,14 @@ pub fn remote_revision(url: &str, branch: Option<&str>) -> Result<String> {
         .args(["ls-remote", url, target])
         .output()?;
     if !output.status.success() {
-        return Err(crate::error::SkillzError::Message(
+        return Err(crate::error::SkilError::Message(
             "git ls-remote failed".to_string(),
         ));
     }
     let stdout = String::from_utf8_lossy(&output.stdout);
     let rev = stdout.split_whitespace().next().unwrap_or("").to_string();
     if rev.is_empty() {
-        return Err(crate::error::SkillzError::Message(
+        return Err(crate::error::SkilError::Message(
             "Could not resolve remote revision".to_string(),
         ));
     }

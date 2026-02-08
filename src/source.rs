@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::error::{Result, SkillzError};
+use crate::error::{Result, SkilError};
 
 /// Source metadata used for lock file and updates.
 #[derive(Debug, Clone)]
@@ -31,7 +31,7 @@ pub fn parse_source(source: &str) -> Result<Source> {
     if is_local_path(source) {
         let source_path = PathBuf::from(source);
         if !source_path.exists() {
-            return Err(SkillzError::Message(format!(
+            return Err(SkilError::Message(format!(
                 "Local path does not exist: {}",
                 source
             )));
@@ -83,7 +83,7 @@ fn is_local_path(source: &str) -> bool {
 fn parse_owner_repo(source: &str) -> Result<Source> {
     let parts: Vec<&str> = source.split('/').filter(|s| !s.is_empty()).collect();
     if parts.len() < 2 {
-        return Err(SkillzError::Message(
+        return Err(SkilError::Message(
             "Invalid source: expected owner/repo or URL".to_string(),
         ));
     }

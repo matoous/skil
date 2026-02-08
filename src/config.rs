@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use crate::error::{Result, SkillzError};
+use crate::error::{Result, SkilError};
 
 const CONFIG_DIR: &str = "skil";
 const CONFIG_FILE: &str = "config.toml";
@@ -10,14 +10,14 @@ const LOCAL_CONFIG_FILE: &str = ".skil.toml";
 
 /// Persistent configuration for installed sources and skills.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
-pub struct SkillzConfig {
+pub struct SkilConfig {
     #[serde(rename = "source")]
-    pub sources: BTreeMap<String, SkillzSource>,
+    pub sources: BTreeMap<String, SkilSource>,
 }
 
 /// A source entry tracked in config.toml.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SkillzSource {
+pub struct SkilSource {
     #[serde(rename = "source-type")]
     pub source_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -65,23 +65,23 @@ pub fn config_location_auto() -> Result<ConfigLocation> {
 }
 
 /// Reads config from disk, returning an empty config if missing.
-pub fn read_config(path: &Path) -> Result<SkillzConfig> {
+pub fn read_config(path: &Path) -> Result<SkilConfig> {
     if !path.exists() {
-        return Ok(SkillzConfig::default());
+        return Ok(SkilConfig::default());
     }
     let content = std::fs::read_to_string(path)?;
-    let config: SkillzConfig =
-        toml::from_str(&content).map_err(|err| SkillzError::Message(err.to_string()))?;
+    let config: SkilConfig =
+        toml::from_str(&content).map_err(|err| SkilError::Message(err.to_string()))?;
     Ok(config)
 }
 
 /// Writes config to disk, creating parent directories as needed.
-pub fn write_config(path: &Path, config: &SkillzConfig) -> Result<()> {
+pub fn write_config(path: &Path, config: &SkilConfig) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     let content =
-        toml::to_string_pretty(config).map_err(|err| SkillzError::Message(err.to_string()))?;
+        toml::to_string_pretty(config).map_err(|err| SkilError::Message(err.to_string()))?;
     std::fs::write(path, content)?;
     Ok(())
 }
@@ -90,7 +90,7 @@ pub fn write_config(path: &Path, config: &SkillzConfig) -> Result<()> {
 pub fn update_config(
     path: &Path,
     source_key: &str,
-    source: SkillzSource,
+    source: SkilSource,
     skills: &[String],
     revision: Option<String>,
 ) -> Result<()> {
@@ -125,10 +125,10 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("config.toml");
 
-        let mut config = SkillzConfig::default();
+        let mut config = SkilConfig::default();
         config.sources.insert(
             "repo".to_string(),
-            SkillzSource {
+            SkilSource {
                 source_type: "github".to_string(),
                 branch: Some("main".to_string()),
                 subpath: Some("skills".to_string()),
@@ -153,7 +153,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("config.toml");
         let source_key = "https://github.com/example/repo.git";
-        let source = SkillzSource {
+        let source = SkilSource {
             source_type: "github".to_string(),
             branch: Some("main".to_string()),
             subpath: None,

@@ -12,7 +12,7 @@ pub mod skill;
 pub mod source;
 pub mod ui;
 
-pub use error::{Result, SkillzError};
+pub use error::{Result, SkilError};
 
 /// Entry point for the CLI command dispatch.
 pub fn run() -> Result<()> {

@@ -2,7 +2,7 @@ use thiserror::Error;
 
 /// Error type for skil operations.
 #[derive(Error, Debug)]
-pub enum SkillzError {
+pub enum SkilError {
     #[error("{0}")]
     Message(String),
     #[error(transparent)]
@@ -24,4 +24,4 @@ pub enum SkillzError {
 }
 
 /// Convenient result type for skil APIs.
-pub type Result<T> = std::result::Result<T, SkillzError>;
+pub type Result<T> = std::result::Result<T, SkilError>;

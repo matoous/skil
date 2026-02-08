@@ -8,9 +8,9 @@ use dialoguer::theme::ColorfulTheme;
 
 use crate::agent::{agent_configs, resolve_agents};
 use crate::config::{
-    SkillzSource, config_location, config_location_auto, read_config, update_config,
+    SkilSource, config_location, config_location_auto, read_config, update_config,
 };
-use crate::error::{Result, SkillzError};
+use crate::error::{Result, SkilError};
 use crate::git::{clone_repo, head_revision, remote_revision};
 use crate::install::{
     InstallMode, agent_skills_base, canonical_skills_dir, install_skill, sanitize_name,
@@ -143,7 +143,7 @@ struct SearchApiSkill {
 #[derive(Debug)]
 struct UpdateEntry {
     source_key: String,
-    source: SkillzSource,
+    source: SkilSource,
     latest_revision: String,
 }
 
@@ -162,7 +162,7 @@ fn prompt_for_skills(skills: &[crate::skill::Skill]) -> Result<Vec<String>> {
         .items(&items)
         .max_length(12)
         .interact()
-        .map_err(|err| SkillzError::Message(err.to_string()))?;
+        .map_err(|err| SkilError::Message(err.to_string()))?;
     let selected = selection
         .into_iter()
         .map(|idx| skills[idx].name.clone())
@@ -213,7 +213,7 @@ fn prompt_for_agents() -> Result<Vec<String>> {
         .with_prompt("Select agents to install to")
         .items(&items)
         .interact()
-        .map_err(|err| SkillzError::Message(err.to_string()))?;
+        .map_err(|err| SkilError::Message(err.to_string()))?;
     let selected = selection
         .into_iter()
         .map(|idx| agents[idx].name.to_string())
@@ -303,7 +303,7 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
                 .map(|a| a.name)
                 .collect::<Vec<_>>()
                 .join(", ");
-            return Err(SkillzError::Message(format!(
+            return Err(SkilError::Message(format!(
                 "Invalid agents: {}. Valid agents: {}",
                 invalid.join(", "),
                 valid_list
@@ -314,7 +314,7 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
     let agents = if should_prompt_agents {
         let agents = resolve_agents(&args.agent);
         if agents.is_empty() {
-            return Err(SkillzError::Message("No agents selected".to_string()));
+            return Err(SkilError::Message("No agents selected".to_string()));
         }
         agents
     } else {
@@ -331,7 +331,7 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
             .items(["Project (current directory)", "Global (home directory)"])
             .default(0)
             .interact()
-            .map_err(|err| SkillzError::Message(err.to_string()))?;
+            .map_err(|err| SkilError::Message(err.to_string()))?;
         install_global = selection == 1;
     }
 
@@ -346,7 +346,7 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
             .items(["Symlink (recommended)", "Copy to each agent"])
             .default(0)
             .interact()
-            .map_err(|err| SkillzError::Message(err.to_string()))?;
+            .map_err(|err| SkilError::Message(err.to_string()))?;
         if selection == 1 {
             install_mode = InstallMode::Copy;
         }
@@ -382,9 +382,7 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
     let skills = discover_skills(&base_path, subpath.as_deref(), args.full_depth)?;
 
     if skills.is_empty() {
-        return Err(SkillzError::Message(
-            "No skills found in source".to_string(),
-        ));
+        return Err(SkilError::Message("No skills found in source".to_string()));
     }
 
     if args.list {
@@ -401,7 +399,7 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
 
     let selected_skills = select_skills(&skills, &args.skill);
     if selected_skills.is_empty() {
-        return Err(SkillzError::Message(
+        return Err(SkilError::Message(
             "No matching skills selected".to_string(),
         ));
     }
@@ -424,14 +422,14 @@ pub fn run_add(mut args: AddArgs) -> Result<()> {
         Source::Git { url, .. } => url.clone(),
     };
     let source_entry = match &source {
-        Source::Local { .. } => SkillzSource {
+        Source::Local { .. } => SkilSource {
             source_type: "local".to_string(),
             branch: None,
             subpath: None,
             revision: None,
             skills: vec![],
         },
-        Source::Git { subpath, info, .. } => SkillzSource {
+        Source::Git { subpath, info, .. } => SkilSource {
             source_type: info.source_type.clone(),
             branch: info.github_branch.clone(),
             subpath: subpath.as_ref().map(|p| p.to_string_lossy().to_string()),
@@ -469,12 +467,12 @@ pub fn run_remove(mut args: RemoveArgs) -> Result<()> {
 
     let agents = resolve_agents(&args.agent);
     if agents.is_empty() {
-        return Err(SkillzError::Message("No agents selected".to_string()));
+        return Err(SkilError::Message("No agents selected".to_string()));
     }
 
     let skill_names = if requested_skills.is_empty() {
         if !console::Term::stdout().is_term() {
-            return Err(SkillzError::Message(
+            return Err(SkilError::Message(
                 "No skills provided (interactive remove requires a TTY)".to_string(),
             ));
         }
@@ -498,7 +496,7 @@ pub fn run_remove(mut args: RemoveArgs) -> Result<()> {
         }
 
         if names.is_empty() {
-            return Err(SkillzError::Message(
+            return Err(SkilError::Message(
                 "No skills available to remove".to_string(),
             ));
         }
@@ -509,9 +507,9 @@ pub fn run_remove(mut args: RemoveArgs) -> Result<()> {
             .items(&items)
             .max_length(12)
             .interact()
-            .map_err(|err| SkillzError::Message(err.to_string()))?;
+            .map_err(|err| SkilError::Message(err.to_string()))?;
         if selection.is_empty() {
-            return Err(SkillzError::Message("No skills selected".to_string()));
+            return Err(SkilError::Message("No skills selected".to_string()));
         }
         selection
             .into_iter()
@@ -611,7 +609,7 @@ pub fn run_list(args: ListArgs) -> Result<()> {
 
     let agents = resolve_agents(&args.agent);
     if agents.is_empty() {
-        return Err(SkillzError::Message("No agents selected".to_string()));
+        return Err(SkilError::Message("No agents selected".to_string()));
     }
 
     for agent in agents {
