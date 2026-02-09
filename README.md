@@ -10,9 +10,39 @@ A fast, friendly CLI for managing agent skills.
 
 </div>
 
-Skil is a CLI tool that makes it easy to install, update, and organize agent skills from Git repositories or archives. It wraps the workflows around skill packages so developers and teams can share curated skill sets, keep them up to date, and bootstrap new agents quickly without manual copying or custom scripts.
+Skil is a CLI tool that makes it easy to install, update, and organize [Agent Skills](https://agentskills.io/home) from Git repositories or archives. It wraps the workflows around skill packages so developers and teams can share curated skill sets, keep them up to date, and bootstrap new agents quickly without manual copying or custom scripts.
 
 This tool is inspired by [vercel-labs/skills](https://github.com/vercel-labs/skills) but meant for those, that don't want to rely on javascript.
+
+## Why?
+
+Existing tools recommend that you copy skill over into your repository or your tool's global configuration folder. `skil` aims to make the maintenance of skills easier by tracking their upstreams and allowing you to update skills just like you would with other dependencies.
+
+You can still have your local skills, but if you decide to use skill from another repository, e.g.:
+
+```sh
+skil add https://github.com/github/awesome-copilot --skill gh-cli
+```
+
+`skil` will create a `.skil.toml` lock-file for you:
+
+```toml
+[source."https://github.com/github/awesome-copilot.git"]
+checksum = "d99ba7198680e68f49d7e4cd2f7cc38209f3b232"
+skills = ["gh-cli"]
+```
+
+You can then update installed skills to their latest version:
+
+```sh
+skil update
+```
+
+Or keep only `.skil.toml` in your VCS and allow anyone else to install the tracked skills for the tool of their choice using:
+
+```sh
+skil install
+```
 
 ## Installation
 
