@@ -1,0 +1,18 @@
+[package]
+name = "skil-docs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+description = "Static docs builder for skil"
+
+[dependencies]
+clap.workspace = true
+gix.workspace = true
+maud.workspace = true
+pulldown-cmark.workspace = true
+skil-core.workspace = true

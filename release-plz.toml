@@ -12,3 +12,13 @@ publish = true
 semver_check = false
 git_tag_name = "v{{ version }}"
 git_release_enable = true
+
+[[package]]
+name = "skil-core"
+release = false
+publish = false
+
+[[package]]
+name = "skil-docs"
+release = false
+publish = false

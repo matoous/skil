@@ -1,0 +1,131 @@
+:root {
+  --bg: #f7f7f5;
+  --fg: #141414;
+  --accent: #111111;
+  --muted: #555555;
+  --border: #d8d8d2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, avenir next, avenir, segoe ui, helvetica neue, helvetica, Cantarell, Ubuntu, roboto, noto, arial, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  line-height: 1.6;
+}
+
+main {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 2.2rem 1rem 4rem;
+}
+
+a {
+  color: var(--accent);
+}
+
+a:hover {
+  text-decoration-thickness: 1px;
+}
+
+.lead {
+  color: var(--muted);
+  margin-top: -0.4rem;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.skills {
+  list-style: none;
+  padding: 0;
+  margin: 1.25rem 0 0;
+}
+
+.skills li {
+  margin: 0;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.skills p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+}
+
+.content {
+  margin-top: 1.25rem;
+  padding: 0;
+}
+
+.content pre {
+  overflow-x: auto;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: #f0f0ec;
+  color: var(--fg);
+}
+
+.content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.content .tok-comment {
+  color: #777;
+  font-style: italic;
+}
+
+.content .tok-kw {
+  color: #111;
+  font-weight: 700;
+}
+
+.content .tok-str {
+  color: #3f3f3f;
+}
+
+.content .tok-num {
+  color: #2d2d2d;
+  font-weight: 600;
+}
+
+.content .tok-var {
+  color: #1f1f1f;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.content .tok-flag {
+  color: #1f1f1f;
+  font-weight: 600;
+}
+
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.content th,
+.content td {
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  padding: 0.35rem 0.4rem;
+}
+
+@media (max-width: 720px) {
+  main {
+    padding: 1rem 0.75rem 2.5rem;
+  }
+}

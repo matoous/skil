@@ -57,7 +57,7 @@ Or build from source:
 ```bash
 git clone https://github.com/matoous/skil
 cd skil
-cargo install --path .
+cargo install --path src/skil
 ```
 
 ## Usage
@@ -87,6 +87,12 @@ skil init my-skill
 
 # Generate shell completions
 skil completions zsh
+
+# Build static docs website from repository skills
+skil docs build --source .
+
+# Build and serve docs locally
+skil docs serve --source . --port 4173
 ```
 
 ## Commands
@@ -178,9 +184,25 @@ skil completions <shell>
 
 Supported shells include: `bash`, `zsh`, `fish`, `elvish`, `powershell`.
 
+### docs build
+
+Build a static website that renders discovered repository skills.
+
+```bash
+skil docs build [--source <path>] [--output <path>] [--full-depth]
+```
+
+### docs serve
+
+Build docs and serve them over a local HTTP server.
+
+```bash
+skil docs serve [--source <path>] [--output <path>] [--host <host>] [--port <port>] [--full-depth]
+```
+
 ## Build
 
 ```bash
 cargo build
-cargo run -- --help
+cargo run -p skil -- --help
 ```

@@ -1,17 +1,9 @@
 #![allow(clippy::result_large_err)]
 
-pub mod agent;
-
 mod cli;
-mod config;
-mod error;
-mod git;
-pub mod install;
-pub mod skill;
-pub mod source;
 pub mod ui;
 
-pub use error::{Result, SkilError};
+pub use skil_core::{Result, SkilError};
 
 /// Entry point for the CLI command dispatch.
 pub fn run() -> Result<()> {
@@ -28,5 +20,6 @@ pub fn run() -> Result<()> {
         cli::Command::Update => cli::run_update(),
         cli::Command::Init(args) => cli::run_init(args),
         cli::Command::Completions(args) => cli::run_completions(args),
+        cli::Command::Docs(args) => skil_docs::run_docs(args),
     }
 }

@@ -5,18 +5,19 @@ use std::path::{Path, PathBuf};
 use clap::{Args, Parser, Subcommand};
 use clap_complete::{Shell, generate};
 use dialoguer::theme::ColorfulTheme;
-
-use crate::agent::{agent_configs, resolve_agents};
-use crate::config::{
+use skil_core::agent::{AgentConfig, agent_configs, resolve_agents};
+use skil_core::config::{
     SkilConfig, SkilSource, config_location, config_location_auto, read_config, update_config,
 };
-use crate::error::{Result, SkilError};
-use crate::git::{checkout_revision, clone_repo, head_revision, latest_tag, remote_revision};
-use crate::install::{
+use skil_core::git::{checkout_revision, clone_repo, head_revision, latest_tag, remote_revision};
+use skil_core::install::{
     InstallMode, agent_skills_base, canonical_skills_dir, install_skill, sanitize_name,
 };
-use crate::skill::{discover_skills, parse_skill_md, select_skills};
-use crate::source::{Source, parse_source};
+use skil_core::skills::{Skill, discover_skills, parse_skill_md, select_skills};
+use skil_core::source::{Source, parse_source};
+use skil_core::{Result, SkilError};
+use skil_docs::DocsArgs;
+
 use crate::ui;
 
 /// CLI argument parser definition.
@@ -53,6 +54,8 @@ pub enum Command {
     Init(InitArgs),
     #[command(aliases = ["completion"], about = "Generate shell completion scripts")]
     Completions(CompletionsArgs),
+    #[command(about = "Build and serve static docs for discovered skills")]
+    Docs(DocsArgs),
 }
 
 /// Arguments for `skills add`.
@@ -211,7 +214,7 @@ fn collect_available_updates(config: &SkilConfig) -> Result<Vec<UpdateEntry>> {
 }
 
 /// Presents an interactive skill picker and returns selected skill names.
-fn prompt_for_skills(skills: &[crate::skill::Skill]) -> Result<Vec<String>> {
+fn prompt_for_skills(skills: &[Skill]) -> Result<Vec<String>> {
     let max_width = console::Term::stdout().size().1 as usize;
     let items: Vec<String> = skills
         .iter()
@@ -339,10 +342,7 @@ pub fn run_completions(args: CompletionsArgs) -> Result<()> {
 }
 
 /// Resolves and validates target agents for install flows.
-fn resolve_install_agents(
-    agent_args: &[String],
-    yes: bool,
-) -> Result<Vec<crate::agent::AgentConfig>> {
+fn resolve_install_agents(agent_args: &[String], yes: bool) -> Result<Vec<AgentConfig>> {
     let mut selected = agent_args.to_vec();
     if selected.is_empty() && !yes {
         selected = prompt_for_agents()?;

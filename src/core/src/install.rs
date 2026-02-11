@@ -4,7 +4,7 @@ use walkdir::WalkDir;
 
 use crate::agent::AgentConfig;
 use crate::error::Result;
-use crate::skill::Skill;
+use crate::skills::Skill;
 
 /// Installation strategy for agent skill directories.
 #[derive(Clone, Copy)]

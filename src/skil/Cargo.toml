@@ -1,0 +1,31 @@
+[package]
+name = "skil"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+description = "A fast, friendly CLI for managing agent skills."
+keywords = ["cli", "agent", "skills", "developer-tools"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = [".github/*", "target/*", "tests/*"]
+
+[[bin]]
+name = "skil"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+clap_complete.workspace = true
+serde.workspace = true
+reqwest.workspace = true
+urlencoding.workspace = true
+dialoguer.workspace = true
+console.workspace = true
+indicatif.workspace = true
+tempfile.workspace = true
+skil-core.workspace = true
+skil-docs.workspace = true
