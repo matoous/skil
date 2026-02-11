@@ -15,10 +15,12 @@ git_release_enable = true
 
 [[package]]
 name = "skil-core"
-release = false
-publish = false
+release = true
+publish = true
+semver_check = false
 
 [[package]]
 name = "skil-docs"
-release = false
-publish = false
+release = true
+publish = true
+semver_check = false
