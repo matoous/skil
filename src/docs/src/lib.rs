@@ -103,8 +103,13 @@ pub fn run_serve(args: DocsServeArgs) -> Result<()> {
     let addr = format!("{}:{}", args.host, args.port);
     let listener = TcpListener::bind(&addr)?;
     let root = fs::canonicalize(&args.output)?;
+    let docs_url = format!("http://{}", addr);
 
-    println!("Serving docs at http://{}", addr);
+    println!("Serving docs at {}", docs_url);
+    if let Err(err) = open::that(&docs_url) {
+        eprintln!("Failed to open docs in browser: {err}");
+    }
+
     for stream in listener.incoming() {
         let mut stream = match stream {
             Ok(stream) => stream,

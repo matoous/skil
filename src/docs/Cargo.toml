@@ -14,5 +14,6 @@ description = "Static docs builder for skil"
 clap.workspace = true
 gix.workspace = true
 maud.workspace = true
+open.workspace = true
 pulldown-cmark.workspace = true
 skil-core.workspace = true
