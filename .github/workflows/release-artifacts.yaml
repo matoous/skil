@@ -1,0 +1,155 @@
+name: Release Artifacts
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-artifacts-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prerelease:
+    name: Prerelease Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      value: ${{ steps.prerelease.outputs.value }}
+    steps:
+      - name: Set prerelease flag
+        id: prerelease
+        run: |
+          if [[ "${{ github.ref_name }}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  package:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    needs:
+      - prerelease
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: macos-14
+            target: aarch64-apple-darwin
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install target dependencies
+        run: |
+          case "${{ matrix.target }}" in
+            x86_64-unknown-linux-musl)
+              sudo apt-get update
+              sudo apt-get install -y musl-tools
+              ;;
+          esac
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c # v1.15.2
+        with:
+          target: ${{ matrix.target }}
+
+      - name: Build and package
+        id: package
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          cargo build --release --locked --package skil --target "$TARGET"
+
+          version="${GITHUB_REF_NAME#v}"
+          base="skil-${version}-${TARGET}"
+          stage_dir="$(mktemp -d)"
+
+          binary="skil"
+          if [[ "$TARGET" == *windows* ]]; then
+            binary="skil.exe"
+          fi
+
+          cp "target/$TARGET/release/$binary" "$stage_dir/"
+          cp README.md LICENSE "$stage_dir/"
+
+          if [[ "$TARGET" == *windows* ]]; then
+            archive="${base}.zip"
+            (
+              cd "$stage_dir"
+              7z a "../$archive" ./* >/dev/null
+            )
+          else
+            archive="${base}.tar.gz"
+            tar -C "$stage_dir" -czf "$archive" .
+          fi
+
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release archive
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        with:
+          draft: false
+          files: ${{ steps.package.outputs.archive }}
+          prerelease: ${{ needs.prerelease.outputs.value }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  checksum:
+    name: Publish checksums
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    needs:
+      - package
+      - prerelease
+    steps:
+      - name: Download release archives
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p release
+          gh release download "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "skil-*" \
+            --dir release
+
+      - name: Create SHA256SUMS
+        run: |
+          (
+            cd release
+            files=(./*.tar.gz ./*.zip)
+            if [[ ${#files[@]} -eq 0 ]]; then
+              echo "No release archives found for checksum generation"
+              exit 1
+            fi
+            printf '%s\n' "${files[@]}" | sort | xargs shasum -a 256 | sed 's#  \./#  #' > ../SHA256SUMS
+          )
+
+      - name: Upload checksums
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        with:
+          draft: false
+          files: SHA256SUMS
+          prerelease: ${{ needs.prerelease.outputs.value }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
