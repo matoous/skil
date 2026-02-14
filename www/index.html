@@ -1,101 +1,180 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>skil</title>
-    <style>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>skil</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #000000;
+      --muted: #666666;
+    }
+
+    @media (prefers-color-scheme: dark) {
       :root {
-        color-scheme: light dark;
-        --bg: #ffffff;
-        --fg: #000000;
+        --bg: #000000;
+        --fg: #ffffff;
+        --muted: #b0b0b0;
       }
+    }
 
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #000000;
-          --fg: #ffffff;
-        }
-      }
+    * {
+      box-sizing: border-box;
+    }
 
-      * {
-        box-sizing: border-box;
-      }
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+    }
 
-      html,
-      body {
-        margin: 0;
-        width: 100%;
-        height: 100%;
-      }
+    body {
+      display: grid;
+      place-items: center;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    }
 
-      body {
-        display: grid;
-        place-items: center;
-        background: var(--bg);
-        color: var(--fg);
-        font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
-      }
+    .wrap {
+      display: grid;
+      justify-items: center;
+      gap: 0.85rem;
+      padding: 1rem;
+    }
 
-      .logo {
-        font-size: clamp(2rem, 8vw, 6rem);
-        line-height: 1;
-        letter-spacing: 0.02em;
-        user-select: none;
-        white-space: pre;
-      }
-    </style>
-  </head>
-  <body>
+    .logo {
+      font-size: clamp(2rem, 8vw, 6rem);
+      line-height: 1;
+      letter-spacing: 0.02em;
+      user-select: none;
+      white-space: pre;
+    }
+
+    .cmd {
+      margin: 0;
+      padding: 0.3rem 0.6rem;
+      border-radius: 10px;
+      border: 1px solid color-mix(in srgb, var(--fg) 14%, transparent);
+      background: color-mix(in srgb, var(--fg) 6%, var(--bg));
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.6rem;
+      align-items: center;
+    }
+
+    .cmd-text {
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(0.75rem, 2.4vw, 1rem);
+      text-align: left;
+      word-break: break-word;
+    }
+
+    .copy-btn {
+      border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent);
+      background: color-mix(in srgb, var(--fg) 8%, var(--bg));
+      color: var(--fg);
+      border-radius: 8px;
+      padding: 0.4rem 0.65rem;
+      font: inherit;
+      font-size: 0.82rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .copy-btn:hover {
+      background: color-mix(in srgb, var(--fg) 12%, var(--bg));
+    }
+
+    .copy-btn:active {
+      transform: translateY(1px);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
     <div class="logo" id="logo">&gt;skil</div>
+    <div class="cmd">
+      <p class="cmd-text" id="install-cmd">curl -fsSL https://useskil.dev/install.sh | sh</p>
+      <button type="button" class="copy-btn" id="copy-btn" aria-label="Copy install command">Copy</button>
+    </div>
+  </div>
 
-    <script>
-      (() => {
-        const stableText = "skil";
-        const charset = "!\"#$%&'()*+,-./0123456789:;<=>?@[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
-        const logo = document.getElementById("logo");
+  <script>
+    (() => {
+      const stableText = "skil";
+      const charset = "!\"#$%&'()*+,-./0123456789:;<=>?@[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+      const logo = document.getElementById("logo");
 
-        const randomChar = () => charset[Math.floor(Math.random() * charset.length)];
+      const randomChar = () => charset[Math.floor(Math.random() * charset.length)];
 
-        let stabilized = 0;
+      let stabilized = 0;
 
-        const tick = () => {
-          if (stabilized >= stableText.length) {
-            logo.textContent = `>${stableText}`;
+      const tick = () => {
+        if (stabilized >= stableText.length) {
+          logo.textContent = `>${stableText}`;
+          return;
+        }
+
+        let out = ">";
+        for (let i = 0; i < stableText.length; i++) {
+          out += i < stabilized ? stableText[i] : randomChar();
+        }
+        logo.textContent = out;
+
+        const delay = 36;
+        const flipsBeforeNext = 5 - stabilized;
+
+        let remaining = Math.max(2, flipsBeforeNext);
+        const jitter = () => {
+          if (remaining <= 0) {
+            stabilized += 1;
+            tick();
             return;
           }
 
-          let out = ">";
+          let jitterOut = ">";
           for (let i = 0; i < stableText.length; i++) {
-            out += i < stabilized ? stableText[i] : randomChar();
+            jitterOut += i < stabilized ? stableText[i] : randomChar();
           }
-          logo.textContent = out;
-
-          const delay = 36;
-          const flipsBeforeNext = 5 - stabilized;
-
-          let remaining = Math.max(2, flipsBeforeNext);
-          const jitter = () => {
-            if (remaining <= 0) {
-              stabilized += 1;
-              tick();
-              return;
-            }
-
-            let jitterOut = ">";
-            for (let i = 0; i < stableText.length; i++) {
-              jitterOut += i < stabilized ? stableText[i] : randomChar();
-            }
-            logo.textContent = jitterOut;
-            remaining -= 1;
-            setTimeout(jitter, delay);
-          };
-
+          logo.textContent = jitterOut;
+          remaining -= 1;
           setTimeout(jitter, delay);
         };
 
-        tick();
-      })();
-    </script>
-  </body>
+        setTimeout(jitter, delay);
+      };
+
+      tick();
+
+      const copyBtn = document.getElementById("copy-btn");
+      const installCmd = document.getElementById("install-cmd");
+
+      copyBtn?.addEventListener("click", async () => {
+        const command = installCmd?.textContent || "";
+        if (!command) return;
+
+        try {
+          await navigator.clipboard.writeText(command);
+          copyBtn.textContent = "Copied";
+          setTimeout(() => {
+            copyBtn.textContent = "Copy";
+          }, 1200);
+        } catch (_err) {
+          copyBtn.textContent = "Failed";
+          setTimeout(() => {
+            copyBtn.textContent = "Copy";
+          }, 1200);
+        }
+      });
+    })();
+  </script>
+</body>
+
 </html>
