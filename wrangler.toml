@@ -1,4 +1,4 @@
-name = "skil-www"
+name = "skil"
 compatibility_date = "2026-02-14"
 workers_dev = true
 routes = [
