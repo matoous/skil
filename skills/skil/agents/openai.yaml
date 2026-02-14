@@ -1,0 +1,7 @@
+interface:
+  display_name: "Skil CLI"
+  short_description: "Install, manage, distribute, and inspect agent skills."
+  # icon_small: "./assets/small-logo.svg"
+  # icon_large: "./assets/large-logo.png"
+  # brand_color: "#3B82F6"
+  # default_prompt: "Optional surrounding prompt to use the skill with"
