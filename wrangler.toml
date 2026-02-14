@@ -1,0 +1,11 @@
+name = "skil-www"
+compatibility_date = "2026-02-14"
+workers_dev = true
+routes = [
+  { pattern = "useskil.dev/*", zone_name = "useskil.dev" }
+]
+
+[assets]
+directory = "./www"
+not_found_handling = "404-page"
+html_handling = "auto-trailing-slash"

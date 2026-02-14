@@ -25,3 +25,11 @@ install:
 # Build the workspace
 build:
   cargo build --workspace
+
+# Preview docs website with Cloudflare Workers
+cf-dev:
+  npx wrangler dev
+
+# Deploy docs website to Cloudflare Workers
+cf-deploy:
+  npx wrangler deploy
