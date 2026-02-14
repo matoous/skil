@@ -11,6 +11,7 @@
       --bg: #ffffff;
       --fg: #000000;
       --muted: #666666;
+      --safe: max(1rem, env(safe-area-inset-top), env(safe-area-inset-right), env(safe-area-inset-bottom), env(safe-area-inset-left));
     }
 
     @media (prefers-color-scheme: dark) {
@@ -38,6 +39,8 @@
       background: var(--bg);
       color: var(--fg);
       font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+      position: relative;
+      padding: 1rem;
     }
 
     .wrap {
@@ -47,12 +50,67 @@
       padding: 1rem;
     }
 
-    .logo {
-      font-size: clamp(2rem, 8vw, 6rem);
+    .corner {
+      position: fixed;
+      z-index: 10;
+      line-height: 1;
+    }
+
+    .top-left {
+      top: var(--safe);
+      left: var(--safe);
+    }
+
+    .top-right {
+      top: var(--safe);
+      right: var(--safe);
+    }
+
+    .bottom-left {
+      bottom: var(--safe);
+      left: var(--safe);
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .bottom-right {
+      bottom: var(--safe);
+      right: var(--safe);
+    }
+
+    .brand {
+      font-size: clamp(1.2rem, 4vw, 1.5rem);
       line-height: 1;
       letter-spacing: 0.02em;
       user-select: none;
       white-space: pre;
+      text-decoration: none;
+      color: var(--fg);
+    }
+
+    .corner-link {
+      color: var(--fg);
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+
+    .corner-link:hover {
+      text-decoration: underline;
+    }
+
+    .github-link {
+      color: var(--fg);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.4rem;
+      height: 1.4rem;
+    }
+
+    .github-link svg {
+      width: 100%;
+      height: 100%;
+      fill: currentColor;
     }
 
     .cmd {
@@ -94,12 +152,32 @@
     .copy-btn:active {
       transform: translateY(1px);
     }
+
+    .hero-logo {
+      font-size: clamp(2rem, 8vw, 6rem);
+      line-height: 1;
+      letter-spacing: 0.02em;
+      user-select: none;
+      white-space: pre;
+    }
   </style>
 </head>
 
 <body>
+  <div class="corner top-left">
+    <span class="brand">&gt;skil</span>
+  </div>
+  <a class="corner top-right corner-link" href="/">Docs</a>
+  <div class="corner bottom-left">© 2026 Matous Dzivjak</div>
+  <a class="corner bottom-right github-link" href="https://github.com/matoous/skil" aria-label="GitHub repository">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 0.5C5.37 0.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.2 11.38 0.6 0.1 0.82-0.26 0.82-0.58 0-0.28-0.01-1.04-0.02-2.05-3.34 0.73-4.04-1.61-4.04-1.61-0.54-1.39-1.33-1.76-1.33-1.76-1.08-0.74 0.08-0.73 0.08-0.73 1.2 0.09 1.83 1.24 1.83 1.24 1.06 1.82 2.8 1.29 3.48 0.99 0.11-0.77 0.42-1.29 0.76-1.58-2.67-0.31-5.47-1.35-5.47-5.98 0-1.32 0.47-2.4 1.24-3.24-0.13-0.31-0.54-1.57 0.12-3.28 0 0 1.01-0.32 3.3 1.24 0.96-0.27 1.99-0.41 3.01-0.41 1.02 0 2.05 0.14 3.01 0.41 2.29-1.56 3.29-1.24 3.29-1.24 0.66 1.71 0.25 2.97 0.12 3.28 0.77 0.84 1.24 1.92 1.24 3.24 0 4.65-2.81 5.67-5.49 5.97 0.43 0.37 0.82 1.1 0.82 2.22 0 1.6-0.01 2.89-0.01 3.29 0 0.32 0.22 0.69 0.83 0.57A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63 0.5 12 0.5z" />
+    </svg>
+  </a>
+
   <div class="wrap">
-    <div class="logo" id="logo">&gt;skil</div>
+    <div class="hero-logo" id="hero-logo">&gt;skil</div>
     <div class="cmd">
       <p class="cmd-text" id="install-cmd">curl -fsSL https://useskil.dev/install.sh | sh</p>
       <button type="button" class="copy-btn" id="copy-btn" aria-label="Copy install command">Copy</button>
@@ -110,15 +188,16 @@
     (() => {
       const stableText = "skil";
       const charset = "!\"#$%&'()*+,-./0123456789:;<=>?@[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
-      const logo = document.getElementById("logo");
+      const heroLogo = document.getElementById("hero-logo");
 
       const randomChar = () => charset[Math.floor(Math.random() * charset.length)];
 
       let stabilized = 0;
 
       const tick = () => {
+        if (!heroLogo) return;
         if (stabilized >= stableText.length) {
-          logo.textContent = `>${stableText}`;
+          heroLogo.textContent = `>${stableText}`;
           return;
         }
 
@@ -126,7 +205,7 @@
         for (let i = 0; i < stableText.length; i++) {
           out += i < stabilized ? stableText[i] : randomChar();
         }
-        logo.textContent = out;
+        heroLogo.textContent = out;
 
         const delay = 36;
         const flipsBeforeNext = 5 - stabilized;
@@ -143,7 +222,7 @@
           for (let i = 0; i < stableText.length; i++) {
             jitterOut += i < stabilized ? stableText[i] : randomChar();
           }
-          logo.textContent = jitterOut;
+          heroLogo.textContent = jitterOut;
           remaining -= 1;
           setTimeout(jitter, delay);
         };
