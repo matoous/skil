@@ -81,6 +81,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           base="skil-${version}-${TARGET}"
           stage_dir="$(mktemp -d)"
+          archive_path="$GITHUB_WORKSPACE"
 
           binary="skil"
           if [[ "$TARGET" == *windows* ]]; then
@@ -94,11 +95,16 @@ jobs:
             archive="${base}.zip"
             (
               cd "$stage_dir"
-              7z a "../$archive" ./* >/dev/null
+              7z a "$archive_path/$archive" ./* >/dev/null
             )
           else
             archive="${base}.tar.gz"
-            tar -C "$stage_dir" -czf "$archive" .
+            tar -C "$stage_dir" -czf "$archive_path/$archive" .
+          fi
+
+          if [[ ! -f "$archive_path/$archive" ]]; then
+            echo "Expected archive not found: $archive_path/$archive"
+            exit 1
           fi
 
           echo "archive=$archive" >> "$GITHUB_OUTPUT"
@@ -137,6 +143,7 @@ jobs:
         run: |
           (
             cd release
+            shopt -s nullglob
             files=(./*.tar.gz ./*.zip)
             if [[ ${#files[@]} -eq 0 ]]; then
               echo "No release archives found for checksum generation"
