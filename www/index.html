@@ -46,8 +46,15 @@
     .wrap {
       display: grid;
       justify-items: center;
-      gap: 0.85rem;
+      gap: 1.5rem;
       padding: 1rem;
+    }
+
+    .install {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
     }
 
     .corner {
@@ -160,6 +167,26 @@
       user-select: none;
       white-space: pre;
     }
+
+    .hero-desc {
+      margin: 0;
+      max-width: 56ch;
+      text-align: center;
+      color: var(--muted);
+      font-size: clamp(0.9rem, 2.3vw, 1rem);
+      line-height: 1.5;
+    }
+
+    .hero-desc a {
+      color: var(--fg);
+    }
+
+    .install-note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+      text-align: center;
+    }
   </style>
 </head>
 
@@ -178,9 +205,16 @@
 
   <div class="wrap">
     <div class="hero-logo" id="hero-logo">&gt;skil</div>
-    <div class="cmd">
-      <p class="cmd-text" id="install-cmd">curl -fsSL https://useskil.dev/install.sh | sh</p>
-      <button type="button" class="copy-btn" id="copy-btn" aria-label="Copy install command">Copy</button>
+    <p class="hero-desc">CLI for installing and managing <a href="https://agentskills.io/home">Agent Skills</a> from
+      repos or archives. Built for teams and companies that want shared, up-to-date skill sets.</p>
+    <div class="install">
+      <p class="install-note">Install, then run <code>skil add &lt;source&gt;</code> to pull skills into your agent
+        setup.
+      </p>
+      <div class="cmd">
+        <p class="cmd-text" id="install-cmd">curl -fsSL https://useskil.dev/install.sh | sh</p>
+        <button type="button" class="copy-btn" id="copy-btn" aria-label="Copy install command">Copy</button>
+      </div>
     </div>
   </div>
 
