@@ -1,0 +1,188 @@
+---
+import { LinkButton } from "@astrojs/starlight/components";
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+import type { StarlightPageProps } from "@astrojs/starlight/props";
+
+const props = {
+	frontmatter: {
+		template: "splash",
+		title: "",
+	},
+} as StarlightPageProps;
+---
+
+<StarlightPage {...props}>
+  <div class="wrap">
+    <div class="hero-logo" id="hero-logo">&gt;skil</div>
+    <p class="hero-desc">CLI for installing and managing <a href="https://agentskills.io/home">Agent Skills</a> from
+      repos or archives. Built for teams and companies that want shared, up-to-date skill sets.</p>
+    <div class="install">
+      <p class="install-note">Install, then run <code>skil add &lt;source&gt;</code> to pull skills into your agent
+        setup.
+      </p>
+      <div class="cmd">
+        <p class="cmd-text" id="install-cmd">curl -fsSL https://useskil.dev/install.sh | sh</p>
+        <button type="button" class="copy-btn" id="copy-btn" aria-label="Copy install command">Copy</button>
+      </div>
+    </div>
+    <LinkButton href="/overview" icon="right-arrow">
+      Read the docs
+    </LinkButton>
+  </div>
+</StarlightPage>
+
+<script>
+  (() => {
+    const stableText = "skil";
+    const charset = "!\"#$%&'()*+,-./0123456789:;<=>?@[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+    const heroLogo = document.getElementById("hero-logo");
+
+    const randomChar = () => charset[Math.floor(Math.random() * charset.length)];
+
+    let stabilized = 0;
+
+    const tick = () => {
+      if (!heroLogo) return;
+      if (stabilized >= stableText.length) {
+        heroLogo.textContent = `>${stableText}`;
+        return;
+      }
+
+      let out = ">";
+      for (let i = 0; i < stableText.length; i++) {
+        out += i < stabilized ? stableText[i] : randomChar();
+      }
+      heroLogo.textContent = out;
+
+      const delay = 36;
+      const flipsBeforeNext = 5 - stabilized;
+
+      let remaining = Math.max(2, flipsBeforeNext);
+      const jitter = () => {
+        if (remaining <= 0) {
+          stabilized += 1;
+          tick();
+          return;
+        }
+
+        let jitterOut = ">";
+        for (let i = 0; i < stableText.length; i++) {
+          jitterOut += i < stabilized ? stableText[i] : randomChar();
+        }
+        heroLogo.textContent = jitterOut;
+        remaining -= 1;
+        setTimeout(jitter, delay);
+      };
+
+      setTimeout(jitter, delay);
+    };
+
+    tick();
+
+    const copyBtn = document.getElementById("copy-btn");
+    const installCmd = document.getElementById("install-cmd");
+
+    copyBtn?.addEventListener("click", async () => {
+      const command = installCmd?.textContent || "";
+      if (!command) return;
+
+      try {
+        await navigator.clipboard.writeText(command);
+        copyBtn.textContent = "Copied";
+        setTimeout(() => {
+          copyBtn.textContent = "Copy";
+        }, 1200);
+      } catch (_err) {
+        copyBtn.textContent = "Failed";
+        setTimeout(() => {
+          copyBtn.textContent = "Copy";
+        }, 1200);
+      }
+    });
+  })();
+</script>
+
+<style>
+.wrap {
+  display: grid;
+  justify-items: center;
+  gap: 1.5rem;
+}
+
+.install {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cmd {
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--fg) 14%, transparent);
+  background: color-mix(in srgb, var(--fg) 6%, var(--sl-color-bg));
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.cmd-text {
+  margin: 0;
+  color: color-mix(in srgb, var(--fg) 68%, transparent);
+  font-size: clamp(0.75rem, 2.4vw, 1rem);
+  text-align: left;
+  word-break: break-word;
+}
+
+.copy-btn {
+  margin-top: 0;
+  border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent);
+  background: color-mix(in srgb, var(--fg) 8%, var(--sl-color-bg));
+  color: var(--fg);
+  border-radius: 8px;
+  padding: 0.4rem 0.65rem;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.copy-btn:hover {
+  background: color-mix(in srgb, var(--fg) 12%, var(--sl-color-bg));
+}
+
+.copy-btn:active {
+  transform: translateY(1px);
+}
+
+.hero-logo {
+  font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(2rem, 8vw, 6rem);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  user-select: none;
+  white-space: pre;
+}
+
+.hero-desc {
+  margin: 0;
+  max-width: 56ch;
+  text-align: center;
+  color: color-mix(in srgb, var(--fg) 68%, transparent);
+  font-size: clamp(0.9rem, 2.3vw, 1rem);
+  line-height: 1.5;
+}
+
+.hero-desc a {
+  color: var(--fg);
+}
+
+.install-note {
+  margin: 0;
+  color: color-mix(in srgb, var(--fg) 68%, transparent);
+  font-size: 0.82rem;
+  text-align: center;
+}
+</style>

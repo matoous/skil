@@ -1,0 +1,18 @@
+---
+import Default from "@astrojs/starlight/components/SiteTitle.astro";
+---
+
+<Default {...Astro.props}/>
+
+<style>
+  :global(.site-title) {
+    font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 1.2rem;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    user-select: none;
+    text-decoration: none;
+    color: var(--fg);
+    font-weight: 400;
+  }
+</style>

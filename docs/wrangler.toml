@@ -2,11 +2,14 @@ name = "skil"
 compatibility_date = "2026-02-14"
 workers_dev = true
 
+[build]
+command = "npm run build"
+
 [[routes]]
 pattern = "useskil.dev"
 custom_domain = true
 
 [assets]
-directory = "./www"
+directory = "./dist"
 not_found_handling = "404-page"
 html_handling = "auto-trailing-slash"

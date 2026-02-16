@@ -26,10 +26,11 @@ install:
 build:
   cargo build --workspace
 
-# Preview docs website with Cloudflare Workers
+# Preview docs website with live reload
 cf-dev:
-  npx wrangler dev
+  npm --prefix docs run dev
 
 # Deploy docs website to Cloudflare Workers
 cf-deploy:
-  npx wrangler deploy
+  npm --prefix docs run build
+  npx wrangler deploy --config docs/wrangler.toml
