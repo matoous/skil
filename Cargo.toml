@@ -3,7 +3,7 @@ members = ["src/core", "src/docs", "src/skil"]
 resolver = "2"
 
 [workspace.package]
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"
@@ -13,8 +13,8 @@ documentation = "https://docs.rs/skil"
 readme = "README.md"
 
 [workspace.dependencies]
-skil-core = { path = "src/core", version = "0.0.1" }
-skil-docs = { path = "src/docs", version = "0.0.1" }
+skil-core = { path = "src/core", version = "0.0.2" }
+skil-docs = { path = "src/docs", version = "0.0.2" }
 clap = { version = "4.5.4", features = ["derive"] }
 clap_complete = "4.5.4"
 gix = { version = "0.78.0", features = ["blocking-http-transport-reqwest-rust-tls", "worktree-mutation"] }
