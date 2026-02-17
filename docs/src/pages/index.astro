@@ -1,5 +1,5 @@
 ---
-import { LinkButton } from "@astrojs/starlight/components";
+import { Code, LinkButton } from "@astrojs/starlight/components";
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
 import type { StarlightPageProps } from "@astrojs/starlight/props";
 
@@ -20,12 +20,9 @@ const props = {
       <p class="install-note">Install, then run <code>skil add &lt;source&gt;</code> to pull skills into your agent
         setup.
       </p>
-      <div class="cmd">
-        <p class="cmd-text" id="install-cmd">curl -fsSL https://useskil.dev/install.sh | sh</p>
-        <button type="button" class="copy-btn" id="copy-btn" aria-label="Copy install command">Copy</button>
-      </div>
+      <Code lang="sh" code="curl -fsSL https://useskil.dev/install.sh | sh" />
     </div>
-    <LinkButton href="/overview" icon="right-arrow">
+    <LinkButton href="/overview" icon="right-arrow" class="button">
       Read the docs
     </LinkButton>
   </div>
@@ -116,47 +113,6 @@ const props = {
   gap: 0.5rem;
 }
 
-.cmd {
-  margin: 0;
-  padding: 0.3rem 0.6rem;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--fg) 14%, transparent);
-  background: color-mix(in srgb, var(--fg) 6%, var(--sl-color-bg));
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.6rem;
-  align-items: center;
-}
-
-.cmd-text {
-  margin: 0;
-  color: color-mix(in srgb, var(--fg) 68%, transparent);
-  font-size: clamp(0.75rem, 2.4vw, 1rem);
-  text-align: left;
-  word-break: break-word;
-}
-
-.copy-btn {
-  margin-top: 0;
-  border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent);
-  background: color-mix(in srgb, var(--fg) 8%, var(--sl-color-bg));
-  color: var(--fg);
-  border-radius: 8px;
-  padding: 0.4rem 0.65rem;
-  font: inherit;
-  font-size: 0.82rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.copy-btn:hover {
-  background: color-mix(in srgb, var(--fg) 12%, var(--sl-color-bg));
-}
-
-.copy-btn:active {
-  transform: translateY(1px);
-}
-
 .hero-logo {
   font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
   font-size: clamp(2rem, 8vw, 6rem);
@@ -170,13 +126,6 @@ const props = {
   margin: 0;
   max-width: 56ch;
   text-align: center;
-  color: color-mix(in srgb, var(--fg) 68%, transparent);
-  font-size: clamp(0.9rem, 2.3vw, 1rem);
-  line-height: 1.5;
-}
-
-.hero-desc a {
-  color: var(--fg);
 }
 
 .install-note {
@@ -184,5 +133,10 @@ const props = {
   color: color-mix(in srgb, var(--fg) 68%, transparent);
   font-size: 0.82rem;
   text-align: center;
+}
+
+.button {
+  color: var(--sl-color-bg);
+  text-decoration: none;
 }
 </style>

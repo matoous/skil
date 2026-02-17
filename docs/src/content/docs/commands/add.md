@@ -24,5 +24,6 @@ skil add <source> [options]
 skil add vercel-labs/agent-skills
 skil add vercel-labs/agent-skills --list
 skil add vercel-labs/agent-skills --skill frontend-design
+skil add owner/repo
 skil add https://github.com/github/awesome-copilot --skill gh-cli
 ```
