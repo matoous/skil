@@ -15,7 +15,7 @@ readme = "README.md"
 [workspace.dependencies]
 skil-core = { path = "src/core", version = "0.0.1" }
 skil-docs = { path = "src/docs", version = "0.0.1" }
-clap = { version = "4.5.4", features = ["derive"] }
+clap = { version = "4.5.58", features = ["derive"] }
 clap_complete = "4.5.4"
 gix = { version = "0.78.0", features = ["blocking-http-transport-reqwest-rust-tls", "worktree-mutation"] }
 serde = { version = "1.0", features = ["derive"] }
