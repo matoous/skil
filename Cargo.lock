@@ -2745,7 +2745,7 @@ dependencies = [
 
 [[package]]
 name = "skil"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "clap",
  "clap_complete",
@@ -2762,7 +2762,7 @@ dependencies = [
 
 [[package]]
 name = "skil-core"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "dirs",
  "gix",
@@ -2778,7 +2778,7 @@ dependencies = [
 
 [[package]]
 name = "skil-docs"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "clap",
  "gix",
